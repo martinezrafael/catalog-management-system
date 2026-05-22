@@ -45,4 +45,19 @@ export class UpdateProductController {
       .returning("*");
     return res.status(200).json(updatedProduct);
   }
+
+  async updateCategories(req: Request, res: Response): Promise<Response> {
+    const { id } = req.params;
+    const { category_ids } = req.body;
+
+    await db("product_categories").where({ product_id: id }).del();
+    await db("product_categories").insert(
+      category_ids.map((catId: number) => ({
+        product_id: id,
+        category_id: catId,
+      })),
+    );
+
+    return res.status(204).send();
+  }
 }
