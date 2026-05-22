@@ -9,12 +9,14 @@ const envSchema = z.object({
   DATABASE_URL: z.url({
     message: "A DATABASE_URL precisa ser uma URL válida de conexão",
   }),
+  REDIS_URL: z.url("A REDIS_URL precisa ser uma URL válida"),
+  REDIS_PASSWORD: z.string().min(1, "A REDIS_PASSWORD é obrigatória"),
 });
 
 const _env = envSchema.safeParse(process.env);
 
 if (!_env.success) {
-  console.error("❌ Invalid environment variables:");
+  console.error("Invalid environment variables:");
   _env.error.issues.forEach((issue) => {
     console.error(`  - ${issue.path.join(".")}: ${issue.message}`);
   });
