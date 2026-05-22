@@ -1,8 +1,20 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 export function CatalogDashboard() {
   const [products, setProducts] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
+
+  const apiUrl = import.meta.env.VITE_API_URL;
+
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      fetch(`${apiUrl}/api/v1/products?q=${searchTerm}`)
+        .then((res) => res.json())
+        .then((result) => setProducts(result.data));
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm]);
 
   return (
     <div className="p-6">
