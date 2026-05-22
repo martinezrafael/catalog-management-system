@@ -17,4 +17,32 @@ export class UpdateProductController {
 
     return res.status(200).json(updatedProduct);
   }
+
+  async patch(req: Request, res: Response): Promise<Response> {
+    const { id } = req.params;
+    const fieldsToUpdate = req.body;
+
+    if (fieldsToUpdate.attributes) {
+      const blacklistedKeys = [
+        "is_promotional",
+        "verified_vendor",
+        "system_priority",
+      ];
+      blacklistedKeys.forEach((key) => delete fieldsToUpdate.attributes[key]);
+
+      const [currentProduct] = await db("products")
+        .where({ id })
+        .select("attributes");
+      fieldsToUpdate.attributes = {
+        ...currentProduct.attributes,
+        ...fieldsToUpdate.attributes,
+      };
+    }
+
+    const [updatedProduct] = await db("products")
+      .where({ id })
+      .update(fieldsToUpdate)
+      .returning("*");
+    return res.status(200).json(updatedProduct);
+  }
 }
