@@ -52,7 +52,7 @@ const worker = new Worker(
         external_title: fakeStoreData.title || "Não informado",
         external_category: fakeStoreData.category || "Geral",
         external_base_price: fakeStoreData.price || 0,
-        api_enriched_at: new Date().toISOString(),
+        api_enrich_at: new Date().toISOString(),
       };
 
       await db("products")
@@ -72,3 +72,15 @@ const worker = new Worker(
     limiter: { max: 10, duration: 1000 },
   },
 );
+
+worker.on("failed", async (job: Job | undefined, err: Error) => {
+  if (job && job.attemptsMade >= 5) {
+    await db("products")
+      .where({ id: job.data.productId })
+      .update({ status: "FAILED" });
+
+    console.error(
+      `Job esgotado após 5 tentativas. Produto ${job.data.productId} movido para FAILED. Erro: ${err.message}`,
+    );
+  }
+});
