@@ -11,6 +11,7 @@ const envSchema = z.object({
   }),
   REDIS_URL: z.url("A REDIS_URL precisa ser uma URL válida"),
   REDIS_PASSWORD: z.string().min(1, "A REDIS_PASSWORD é obrigatória"),
+  FAKE_STORE_API_URL: z.url("A FAKE_STORE_API_URL precisa ser uma URL válida"),
 });
 
 const _env = envSchema.safeParse(process.env);
