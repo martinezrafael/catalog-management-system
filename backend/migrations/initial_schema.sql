@@ -13,6 +13,7 @@ CREATE TABLE products (
     sku VARCHAR(50) NOT NULL UNIQUE,
     price_cents INTEGER NOT NULL,
     status product_status NOT NULL DEFAULT 'PROCESSING',
+    attributes JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
