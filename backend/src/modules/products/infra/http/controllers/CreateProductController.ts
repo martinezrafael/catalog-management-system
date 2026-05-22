@@ -1,5 +1,7 @@
 import type { Request, Response } from "express";
 import { db } from "../../../../../shared/infra/database/postgres.js";
+import { productQueue } from "../../../../../shared/infra/queues/bullmq.js";
+import { redisClient } from "../../../../../shared/infra/cache/redis.js";
 
 export class CreateProductController {
   async handle(req: Request, res: Response): Promise<Response> {
@@ -23,6 +25,20 @@ export class CreateProductController {
       })),
     );
 
-    return res.status(202).json({ id: product.id, status: product.status });
+    const jobPayload = { productId: product.id, sku: product.sku };
+    await productQueue.add("enrich_product", jobPayload);
+
+    const httpResponse = { id: product.id, status: product.status };
+
+    if (req.idempotencyCacheKey) {
+      await redisClient.set(
+        req.idempotencyCacheKey,
+        JSON.stringify({ status: 202, body: httpResponse }),
+        "EX",
+        300,
+      );
+    }
+
+    return res.status(202).json(httpResponse);
   }
 }
