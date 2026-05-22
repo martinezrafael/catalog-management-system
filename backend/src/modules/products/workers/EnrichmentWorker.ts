@@ -20,5 +20,6 @@ const worker = new Worker(
   },
   {
     connection: queueRedisConnection,
+    limiter: { max: 10, duration: 1000 },
   },
 );
