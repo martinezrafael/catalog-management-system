@@ -2,7 +2,7 @@ import { Queue } from "bullmq";
 import { env } from "../../../config/env.js";
 import { Redis } from "ioredis";
 
-const queueRedisConnection = new Redis(env.REDIS_URL, {
+export const queueRedisConnection = new Redis(env.REDIS_URL, {
   password: env.REDIS_PASSWORD,
   maxRetriesPerRequest: null,
 });
