@@ -15,3 +15,9 @@ CREATE TABLE products (
     status product_status NOT NULL DEFAULT 'PROCESSING',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE product_categories (
+    product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
+    category_id INTEGER REFERENCES categories(id) ON DELETE CASCADE,
+    PRIMARY KEY (product_id, category_id)
+);
