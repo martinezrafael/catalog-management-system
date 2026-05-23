@@ -20,7 +20,6 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
 
-    // ✅ ADICIONE ISSO: Carrega as definições do ecossistema do Jest e do objeto global
     "types": ["jest", "node"]
   },
   "include": ["src"]
