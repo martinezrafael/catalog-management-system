@@ -4,6 +4,7 @@ import { SearchProductController } from "../../../modules/products/infra/http/co
 import { CreateProductController } from "../../../modules/products/infra/http/controllers/CreateProductController.js";
 import { UpdateProductController } from "../../../modules/products/infra/http/controllers/UpdateProductController.js";
 import { CreateCategoryController } from "../../../modules/products/infra/http/controllers/CreateCategoryController.js";
+import { SearchCategoryController } from "../../../modules/products/infra/http/controllers/SearchCategoryController.js";
 import { ensureIdempotency } from "./middlewares/idempotency.js";
 
 const app = express();
@@ -22,6 +23,7 @@ const createProductController = new CreateProductController();
 const searchProductController = new SearchProductController();
 const updateProductController = new UpdateProductController();
 const createCategoryController = new CreateCategoryController();
+const searchCategoryController = new SearchCategoryController();
 
 app.post("/api/v1/products", ensureIdempotency, createProductController.handle);
 app.get("/api/v1/products", searchProductController.index);
@@ -33,5 +35,6 @@ app.put(
 );
 
 app.post("/api/v1/categories", createCategoryController.handle);
+app.get("/api/v1/categories", searchCategoryController.index);
 
 export { app };
