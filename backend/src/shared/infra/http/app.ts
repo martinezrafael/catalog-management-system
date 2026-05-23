@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import { SearchProductController } from "../../../modules/products/infra/http/controllers/SearchProductController.js";
 import { CreateProductController } from "../../../modules/products/infra/http/controllers/CreateProductController.js";
 import { UpdateProductController } from "../../../modules/products/infra/http/controllers/UpdateProductController.js";
@@ -6,6 +7,14 @@ import { CreateCategoryController } from "../../../modules/products/infra/http/c
 import { ensureIdempotency } from "./middlewares/idempotency.js";
 
 const app = express();
+
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
+  }),
+);
 
 app.use(express.json());
 
