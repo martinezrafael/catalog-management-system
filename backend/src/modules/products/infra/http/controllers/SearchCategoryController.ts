@@ -4,7 +4,6 @@ import { db } from "../../../../../shared/infra/database/postgres.js";
 export class SearchCategoryController {
   async index(req: Request, res: Response): Promise<Response> {
     try {
-      // Busca todas as categorias salvas no banco ordenadas por nome
       const categories = await db("categories")
         .select("*")
         .orderBy("name", "asc");

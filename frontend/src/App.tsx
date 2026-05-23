@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { ProductForm } from "./components/ProductForm";
 import { CatalogDashboard } from "./components/CatalogDashboard";
 import { CategoryForm } from "./components/CategoryForm";
