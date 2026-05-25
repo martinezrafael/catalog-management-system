@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
+import type { Knex } from "knex";
 import { db } from "../../../../../shared/infra/database/postgres.js";
 
 const AdvancedSearchSchema = z.object({
@@ -14,6 +15,10 @@ const AdvancedSearchSchema = z.object({
 
 export class SearchProductController {
   async index(req: Request, res: Response): Promise<Response> {
+    if (req.query["category_id"] === "all") {
+      delete req.query["category_id"];
+    }
+
     const parsedQuery = AdvancedSearchSchema.parse(req.query);
     const offset = (parsedQuery.page - 1) * parsedQuery.limit;
 
@@ -30,7 +35,7 @@ export class SearchProductController {
     }
 
     if (parsedQuery.q) {
-      query.where((builder) =>
+      query.where((builder: Knex.QueryBuilder) =>
         builder
           .whereILike("products.name", `%${parsedQuery.q}%`)
           .orWhereILike("products.description", `%${parsedQuery.q}%`),

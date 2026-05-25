@@ -62,7 +62,6 @@ export function CatalogDashboard({ refreshTrigger }: CatalogDashboardProps) {
     }
   }, [filterQ, filterStatus, filterCategory, filterColor]);
 
-  // 🟢 Corrigido: Carrega e atualiza as categorias para o filtro sempre que o gatilho mudar
   useEffect(() => {
     fetch("http://localhost:3333/api/v1/categories")
       .then((res) => {
@@ -70,23 +69,31 @@ export function CatalogDashboard({ refreshTrigger }: CatalogDashboardProps) {
         return res.json();
       })
       .then((data) => {
-        // Blindagem para garantir o mapeamento correto caso mude o envelopamento no back
         const resolvedCategories = Array.isArray(data) ? data : data.data || [];
         setCategories(resolvedCategories);
       })
       .catch((err) =>
         console.error("Erro ao carregar categorias no filtro:", err),
       );
-  }, [refreshTrigger]); // ✨ Agora escuta o estado de sincronização global!
+  }, [refreshTrigger]);
 
-  // ⚡ Requisito UX Assíncrona: Short Polling reativo de 3 segundos
   useEffect(() => {
     fetchProducts();
+
+    const hasPendingProducts = products.some(
+      (prod) => prod.status === "PROCESSING",
+    );
+
+    if (!hasPendingProducts) {
+      return;
+    }
+
     const interval = setInterval(() => {
       fetchProducts();
     }, 3000);
+
     return () => clearInterval(interval);
-  }, [fetchProducts, refreshTrigger]);
+  }, [fetchProducts, refreshTrigger, products]);
 
   return (
     <div className="space-y-6">
@@ -113,9 +120,9 @@ export function CatalogDashboard({ refreshTrigger }: CatalogDashboardProps) {
             className="w-full h-9 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none"
           >
             <option value="all">Todos os Status</option>
-            <option value="PROCESSING">⏳ Pendente</option>
-            <option value="PROCESSED">✅ Processado</option>
-            <option value="FAILED">❌ Falhou</option>
+            <option value="PROCESSING">Pendente</option>
+            <option value="PROCESSED">Processado</option>
+            <option value="FAILED">Falhou</option>
           </select>
         </div>
         <div className="space-y-1">
@@ -193,7 +200,7 @@ export function CatalogDashboard({ refreshTrigger }: CatalogDashboardProps) {
                     </div>
                   </TableCell>
                   <TableCell className="font-semibold text-slate-900">
-                    {(prod.price_cents / 100).toLocaleString("pt-BR", {
+                    {((prod.price_cents || 0) / 100).toLocaleString("pt-BR", {
                       style: "currency",
                       currency: "BRL",
                     })}
