@@ -1,10 +1,12 @@
 import supertest from "supertest";
 import { app } from "../../src/shared/infra/http/app.js";
 import { redisClient } from "../../src/shared/infra/cache/redis.js";
+import { queueRedisConnection } from "../../src/shared/infra/queues/bullmq.js";
 
 describe("Validação de Eficácia da Idempotência", () => {
   afterAll(async () => {
     await redisClient.quit();
+    await queueRedisConnection.quit();
   });
 
   it("deve interceptar requisições concorrentes com chaves idênticas e barrar a duplicidade", async () => {
@@ -17,6 +19,7 @@ describe("Validação de Eficácia da Idempotência", () => {
       attributes: {},
     };
 
+    // Executa os disparos HTTP concorrentes de forma estritamente simultânea
     const [res1, res2] = await Promise.all([
       supertest(app)
         .post("/api/v1/products")
