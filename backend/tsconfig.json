@@ -15,7 +15,8 @@
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
     "skipLibCheck": true,
-    "outDir": "./dist"
+    "outDir": "./dist",
+    "rootDir": "./"
   },
   "include": ["src/**/*", "test/**/*"]
 }
