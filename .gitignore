@@ -3,3 +3,11 @@ frontend/node_modules
 
 .env
 docs/
+
+
+
+node_modules/
+dist/
+build/
+.env
+.env.test
