@@ -53,6 +53,7 @@ jobs:
           node-version: 20
       - name: Run Backend Tests
         run: |
+          # Cria dinamicamente o arquivo .env.test temporário do ambiente de CI
           echo "NODE_ENV=test" > .env.test
           echo "PORT=3333" >> .env.test
           echo "DATABASE_URL=postgres://test_user:test_password@127.0.0.1:5432/catalog_test" >> .env.test
@@ -63,4 +64,7 @@ jobs:
 
           cd backend
           npm ci
+
+          npx dotenv -e ../.env.test -- npx knex migrate:latest --client pg --migrations-directory ./migrations
+
           npm test
