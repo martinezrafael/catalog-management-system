@@ -3,20 +3,32 @@ name: Backend CI
 on:
   push:
     branches: [main, develop]
+    # O CI do backend só dispara se houver alteração no backend ou na própria esteira
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
   pull_request:
     branches: [main, develop]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
 
 jobs:
   lint-and-typecheck:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
       - name: Instalando o NodeJs na Versão 20
         uses: actions/setup-node@v3
         with:
           node-version: 20
+          cache: "npm"
+          cache-dependency-path: "backend/package-lock.json"
+
       - name: Instalando as dependências do Backend
-        run: cd backend && npm install
+        run: cd backend && npm install --no-audit --no-fund
+
       - name: Validando se o TypeScript não possui erros de tipagem
         run: cd backend && npx tsc --noEmit
 
@@ -47,10 +59,14 @@ jobs:
           --health-retries 5
     steps:
       - uses: actions/checkout@v3
+
       - name: Instalando o NodeJs na Versão 20
         uses: actions/setup-node@v3
         with:
           node-version: 20
+          cache: "npm"
+          cache-dependency-path: "backend/package-lock.json"
+
       - name: Executando os testes no Backend
         run: |
           echo "NODE_ENV=test" > .env.test
@@ -64,6 +80,7 @@ jobs:
           cd backend
           npm install --no-audit --no-fund
 
+          # Executa migrações e popula massa inicial no banco efêmero
           PGPASSWORD=test_password psql -h 127.0.0.1 -U test_user -d catalog_test -f migrations/01_initial_schema.sql
           PGPASSWORD=test_password psql -h 127.0.0.1 -U test_user -d catalog_test -f migrations/02_add_performance_indexes.sql
           PGPASSWORD=test_password psql -h 127.0.0.1 -U test_user -d catalog_test -c "INSERT INTO categories (id, name) VALUES (1, 'Eletrônicos') ON CONFLICT DO NOTHING;"
