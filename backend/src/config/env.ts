@@ -12,7 +12,7 @@ const envSchema = z.object({
   REDIS_URL: z.string().url({
     message: "A REDIS_URL precisa ser uma URL válida",
   }),
-  REDIS_PASSWORD: z.string().min(1, "A REDIS_PASSWORD é obrigatória"),
+  REDIS_PASSWORD: z.string().default(""),
   FAKE_STORE_API_URL: z.string().url({
     message: "A FAKE_STORE_API_URL precisa ser uma URL válida",
   }),
