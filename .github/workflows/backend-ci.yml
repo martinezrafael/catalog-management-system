@@ -1,4 +1,4 @@
-name: Continuous Integration
+name: Backend CI
 
 on:
   push:
@@ -11,13 +11,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Setup Node.js
+      - name: Instalando o NodeJs na Versão 20
         uses: actions/setup-node@v3
         with:
           node-version: 20
-      - name: Install Backend Deps
-        run: cd backend && npm install --no-audit --no-fund
-      - name: Typecheck Backend
+      - name: Instalando as dependências do Backend
+        run: cd backend && npm install
+      - name: Validando se o TypeScript não possui erros de tipagem
         run: cd backend && npx tsc --noEmit
 
   integration-tests:
@@ -47,11 +47,11 @@ jobs:
           --health-retries 5
     steps:
       - uses: actions/checkout@v3
-      - name: Setup Node.js
+      - name: Instalando o NodeJs na Versão 20
         uses: actions/setup-node@v3
         with:
           node-version: 20
-      - name: Run Backend Tests
+      - name: Executando os testes no Backend
         run: |
           echo "NODE_ENV=test" > .env.test
           echo "PORT=3333" >> .env.test
