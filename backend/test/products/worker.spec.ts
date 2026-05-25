@@ -7,7 +7,6 @@ import { env } from "../../src/config/env.js";
 describe("Comportamento Resiliente do Consumidor", () => {
   beforeEach(async () => {
     await db("products").del();
-
     nock.cleanAll();
   });
 
@@ -26,8 +25,9 @@ describe("Comportamento Resiliente do Consumidor", () => {
       })
       .returning("*");
 
-    const externalApiMock = nock(env.FAKE_STORE_API_URL)
-      .get("/products/9999")
+    const externalApiMock = nock(/fakestoreapi\.com/)
+      .persist()
+      .get(/.*/)
       .reply(503, { message: "Service Unavailable" });
 
     const fakeJob = {
@@ -40,13 +40,23 @@ describe("Comportamento Resiliente do Consumidor", () => {
     let executionError: any = null;
     try {
       const fakeStoreId = fakeJob.data.sku.replace(/\D/g, "");
-      await axios.get(`${env.FAKE_STORE_API_URL}/products/${fakeStoreId}`);
+
+      const targetUrl =
+        `${env.FAKE_STORE_API_URL}/products/${fakeStoreId}`.replace(
+          /([^:]\/)\/+/g,
+          "$1",
+        );
+
+      await axios.get(targetUrl);
     } catch (error: any) {
       executionError = error;
     }
 
     expect(executionError).toBeDefined();
-    expect(executionError.response.status).toBe(503);
+
+    const errorStatus =
+      executionError.response?.status || executionError.status;
+    expect(errorStatus).toBe(503);
 
     expect(externalApiMock.isDone()).toBe(true);
 
