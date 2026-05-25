@@ -16,28 +16,56 @@ jobs:
         with:
           node-version: 20
       - name: Install Backend Deps
-        run: cd backend && npm ci
+        run: cd backend && npm install --no-audit --no-fund
       - name: Typecheck Backend
         run: cd backend && npx tsc --noEmit
-integration-tests:
-  runs-on: ubuntu-latest
-  services:
-    postgres:
-      image: postgres:15-alpine
-      env:
-        POSTGRES_USER: test_user
-        POSTGRES_PASSWORD: test_password
-        POSTGRES_DB: catalog_test
-      ports:
-        - 5432:5432
-    redis:
-      image: redis:7-alpine
-      ports:
-        - 6379:6379
-  steps:
-    - uses: actions/checkout@v3
-    - name: Run Backend Tests
-      run: |
-        cd backend
-        npm ci
-        npm test
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: catalog_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+      - name: Run Backend Tests
+        run: |
+          echo "NODE_ENV=test" > .env.test
+          echo "PORT=3333" >> .env.test
+          echo "DATABASE_URL=postgres://test_user:test_password@127.0.0.1:5432/catalog_test" >> .env.test
+          echo "REDIS_URL=redis://127.0.0.1:6379" >> .env.test
+          echo "REDIS_PASSWORD=" >> .env.test
+          echo "FAKE_STORE_API_URL=https://fakestoreapi.com" >> .env.test
+          echo "FRONTEND_URL=http://localhost:3000" >> .env.test
+
+          cd backend
+          npm install --no-audit --no-fund
+
+          PGPASSWORD=test_password psql -h 127.0.0.1 -U test_user -d catalog_test -f migrations/01_initial_schema.sql
+          PGPASSWORD=test_password psql -h 127.0.0.1 -U test_user -d catalog_test -f migrations/02_add_performance_indexes.sql
+          PGPASSWORD=test_password psql -h 127.0.0.1 -U test_user -d catalog_test -c "INSERT INTO categories (id, name) VALUES (1, 'Eletrônicos') ON CONFLICT DO NOTHING;"
+
+          npm test

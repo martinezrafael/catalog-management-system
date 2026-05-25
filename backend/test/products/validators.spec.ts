@@ -1,7 +1,15 @@
 import supertest from "supertest";
 import { app } from "../../src/shared/infra/http/app.js";
+import { db } from "../../src/shared/infra/database/postgres.js";
 
 describe("Validações de Payload e DTO", () => {
+  beforeAll(async () => {
+    await db("categories")
+      .insert({ id: 1, name: "Eletrônicos" })
+      .onConflict("id")
+      .ignore();
+  });
+
   it("deve aceitar o payload e delegar o processamento do SKU para a fila assíncrona", async () => {
     const payload = {
       name: "Notebook Assíncrono",

@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "start:api": "tsx src/shared/infra/http/server.ts",
     "start:worker": "tsx src/modules/products/workers/EnrichmentWorker.ts",
     "migrate": "knex migrate:latest --client pg --connection $DATABASE_URL --migrations-directory ./migrations",

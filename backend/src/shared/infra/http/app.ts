@@ -1,4 +1,5 @@
 import express from "express";
+import type { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import { env } from "../../../config/env.js";
 import { SearchProductController } from "../../../modules/products/infra/http/controllers/SearchProductController.js";
@@ -37,5 +38,14 @@ app.put(
 
 app.post("/api/v1/categories", createCategoryController.handle);
 app.get("/api/v1/categories", searchCategoryController.index);
+
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  console.error("❌ Erro capturado na API:", err);
+
+  res.status(500).json({
+    status: "error",
+    message: "Internal server error",
+  });
+});
 
 export { app };
