@@ -66,5 +66,6 @@ jobs:
 
           PGPASSWORD=test_password psql -h 127.0.0.1 -U test_user -d catalog_test -f migrations/01_initial_schema.sql
           PGPASSWORD=test_password psql -h 127.0.0.1 -U test_user -d catalog_test -f migrations/02_add_performance_indexes.sql
+          PGPASSWORD=test_password psql -h 127.0.0.1 -U test_user -d catalog_test -c "INSERT INTO categories (id, name) VALUES (1, 'Eletrônicos') ON CONFLICT DO NOTHING;"
 
           npm test
