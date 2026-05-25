@@ -1,15 +1,54 @@
 services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: catalog_db_prod
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+      - ./backend/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network-prod
+
+  redis:
+    image: redis:7-alpine
+    container_name: catalog_cache_prod
+    command: redis-server --requirepass ${REDIS_PASSWORD} --maxmemory 512mb --maxmemory-policy volatile-lru
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - app-network-prod
+
   api:
     build:
       context: ./backend
       dockerfile: Dockerfile.prod
     container_name: catalog_api_prod
-    command: node dist/shared/infra/http/server.js
     ports:
       - "3333:3333"
     env_file:
       - .env
-    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network-prod
 
   worker:
     build:
@@ -19,7 +58,11 @@ services:
     command: node dist/modules/products/workers/EnrichmentWorker.js
     env_file:
       - .env
-    restart: always
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network-prod
 
   frontend:
     build:
@@ -30,4 +73,15 @@ services:
       - "80:80"
     env_file:
       - .env
-    restart: always
+    depends_on:
+      api:
+        condition: service_started
+    networks:
+      - app-network-prod
+
+volumes:
+  postgres_data_prod:
+
+networks:
+  app-network-prod:
+    driver: bridge

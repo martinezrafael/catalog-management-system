@@ -1,6 +1,6 @@
 # Sistema de Gerenciamento de Catálogo de Produtos
 
-Este repositório contém uma arquitetura distribuída e assíncrona voltada para o processamento de catálogos de produtos com alta vazão e tolerância a falhas. O ecossistema dissocia o recebimento de requisições HTTP da execução de tarefas pesadas de rede (enriquecimento de dados) utilizando mensageria baseada em filas controladas.
+Este repositório contém uma arquitetura distribuída e assíncrona desenvolvida para o processamento de catálogos de produtos com alta vazão e tolerância a falhas. O ecossistema dissocia o recebimento de requisições HTTP da execução de tarefas pesadas de rede (enriquecimento de dados de terceiros) utilizando mensageria baseada em filas controladas.
 
 ---
 
@@ -14,7 +14,7 @@ Siga os passos abaixo para inicializar o ecossistema completo na sua máquina.
 
 ### Passo 1: Configuração das Variáveis de Ambiente
 
-Crie um ficheiro chamado **`.env`** na raiz do projeto (no mesmo nível deste arquivo README). Para garantir a inicialização imediata de todos os serviços conteinerizados, copie e cole o seguinte bloco padrão dentro do seu ficheiro `.env`:
+Crie um ficheiro chamado **`.env`** na raiz do projeto (no mesmo nível deste arquivo README). Copie e cole o seguinte bloco padrão dentro do seu ficheiro `.env` para garantir a inicialização de todos os serviços conteinerizados:
 
 ```env
 # Configurações do PostgreSQL (Infraestrutura)
@@ -40,7 +40,7 @@ VITE_API_URL=http://localhost:3333
 
 ### Isolamento do Ambiente de Testes (.env.test)
 
-- **Função do .env.test:** O projeto possui o ficheiro `.env.test` pré-configurado na raiz para isolar completamente a execução dos testes automatizados de integração e concorrência. Ele força a suíte a apontar para uma base de dados e cache paralelos. Isso garante que os comandos de limpeza executados pelo Jest antes de cada teste não apaguem ou corrompam os dados salvos no seu ambiente de desenvolvimento local.
+- **Função do .env.test:** O projeto possui o ficheiro `.env.test` pré-configurado na raiz para isolar a execução dos testes automatizados de integração e concorrência. Ele força a suíte a apontar para uma base de dados e cache paralelos. Isso garante que os comandos de limpeza executados pelo Jest antes de cada teste não apaguem ou corrompam os dados salvos no seu ambiente de desenvolvimento local.
 
 ### Passo 2: Inicialização da Aplicação (Modo Desenvolvimento)
 
@@ -74,12 +74,14 @@ npm run test
 
 ### Passo 5: Execução em Imagem Otimizada (Modo Produção/AWS Ready)
 
-Caso queira testar o comportamento do sistema simulando um deploy de produção (onde o TypeScript é compilado para JavaScript nativo, dependências de desenvolvimento são omitidas e o frontend é servido via Nginx na porta 80), execute:
+Caso queira testar o comportamento do sistema simulando um deploy de produção (onde o TypeScript é compilado para JavaScript nativo dentro de `dist/`, dependências de desenvolvimento são omitidas e o frontend compilado é servido via Nginx na porta 80), execute:
 
 ```bash
-docker compose -f docker-compose.prod.yml up --build
+docker compose down -v && docker compose -f docker-compose.prod.yml up --build
 
 ```
+
+_Nota: A interface web neste modo passará a ser servida diretamente na porta HTTP padrão:_ `http://localhost`.
 
 ---
 
@@ -95,7 +97,7 @@ docker compose -f docker-compose.prod.yml up --build
 
 **Pergunta:** Ao receber uma demanda vaga da área de negócio, quais etapas você segue para transformá-la em uma especificação técnica pronta para desenvolvimento?
 
-**Resposta:** Para transformar uma demanda vaga em uma especificação técnica pronta, eu sigo um processo de refinamento focado em extrair o valor real do negócio e blindar o escopo. Primeiro, faço uma reunião de alinhamento com a área de negócio para entender a dor que querem resolver (o "porquê") e o resultado esperado, traduzindo a ideia para o formato de User Stories (Quem, O quê e Para quê). Em seguida, defino claramente o escopo estipulando os Critérios de Aceite (o que a funcionalidade deve fazer) e, o mais importante, o que está fora do escopo para evitar o aumento do projeto no meio do caminho. Depois, passo para a análise técnica: mapeio os impactos na arquitetura atual, desenho as mudanças no banco de dados e modulo as novas APIs ou contratos de integração. Por fim, divido essa especificação em tarefas menores, claras e pontuadas (tasks), adicionando cenários de testes e diagramas de fluxo se necessário. A entrega é um documento pronto onde o desenvolvedor sabe exatamente o que codificar e como testar, sem margem para suposições.
+**Resposta:** Para transformar uma demanda vaga em uma especificação técnica pronta, eu sigo um processo de refinamento focado em extrair o valor real do negócio e blindar o escopo. Primeiro, faço uma reunião de alinhamento com a área de negócio para entender a dor que querem resolver (o "porquê") e o resultado esperado, traduzindo a ideia para o formato de User Stories (Quem, O quê e Para quê). En seguida, defino claramente o escopo estipulando os Critérios de Aceite (o que a functionalidade deve fazer) e, o mais importante, o que está fora do escopo para evitar o aumento do projeto no meio do caminho. Depois, passo para a análise técnica: mapeio os impactos na arquitetura atual, desenho as mudanças no banco de dados e modulo as novas APIs ou contratos de integração. Por fim, divido essa especificação em tarefas menores, claras e pontuadas (tasks), adicionando cenários de testes e diagramas de fluxo se necessário. A entrega é um documento pronto onde o desenvolvedor sabe exatamente o que codificar e como testar, sem margem para suposições.
 
 ### Idempotência
 
@@ -117,7 +119,7 @@ docker compose -f docker-compose.prod.yml up --build
 
 ### Qualidade e Entrega
 
-**Pergunta:** Como você decide o que é essencial para uma primeira versão (MVP) e o que deve ser tratado como débito técnico ou melhoria futura?
+**Pergunta:** Como você decide o que é essencial para uma primeira versão (MVP) e o que deve ser tratado como débito técnico ou melhoria futuro?
 
 **Resposta:** Para definir o escopo de um MVP, eu aplico o critério do valor mínimo para o negócio e para o usuário: se a funcionalidade for removida e o produto perder o seu propósito principal ou deixar de resolver a dor central do cliente, ela é essencial. Todo o restante, como automações complexas, otimizações extremas de performance e recursos secundários, é jogado para o backlog de melhorias. O que vira débito técnico consciente são as escolhas de arquitetura feitas para acelerar a entrega, como usar uma infraestrutura mais simples e monolítica ou implementar um processo manual nos bastidores (o famoso "fazer fumaça") para validar a demanda antes de construir um sistema automatizado robusto. O limite dessa linha é a segurança e a integridade dos dados, que nunca devem ser negligenciadas; se o atalho colocar em risco as informações do cliente ou inviabilizar a evolução futura do código, ele deixa de ser débito técnico aceitável e se torna um erro de engenharia.
 
@@ -131,7 +133,7 @@ docker compose -f docker-compose.prod.yml up --build
 
 ## 3. Decisões Técnicas e Trade-offs Realizados
 
-- **Desacoplamento Arquitetural (API vs. Worker):** O core da aplicação foi cindido em duas instâncias isoladas. Quando um produto é ingerido, a API executa validações de contrato síncronas via Zod, persiste o registro local com o status temporário `PROCESSING` e retorna `HTTP 202 Accepted` em poucos milissegundos. O processamento pesado de rede fica delegado ao `EnrichmentWorker.ts` operando sob o BullMQ/Redis em background. O trade-off envolve a necessidade de pooling por parte da interface visual, porém garante imunidade da API contra travamentos por estouro de conexões síncronas.
+- **Desacoplamento Arquitetural (API vs. Worker):** O core da aplicação foi cindido em duas instâncias isoladas. Quando um produto é ingerido, a API executa validações de contrato síncronas via Zod, persiste o registro local com o status temporário `PROCESSING` e retorna `HTTP 202 Accepted` em poucos milissegundos. O processamento pesado de rede fica delegeado ao `EnrichmentWorker.ts` operando sob o BullMQ/Redis em background. O trade-off envolve a necessidade de pooling por parte da interface visual, porém garante imunidade da API contra travamentos por estouro de conexões síncronas.
 - **Consistência Relacional Atômica na Ingestão:** Toda a lógica de inserção do produto básico e amarração de chaves estrangeiras na tabela `product_categories` foi encapsulada dentro de uma transação explícita do Knex (`db.transaction`). Isso assegura que, caso ocorra qualquer falha de barramento ou persistência no meio da requisição, o banco execute o _rollback_ imediato. Evita-se, assim, a existência de registros órfãos ou inconsistentes na base de dados.
 - **Armazenamento Híbrido (Relacional + JSONB):** Para acomodar propriedades flexíveis e dinâmicas de metadados externos sem a adoção de esquemas complexos e custosos como EAV (_Entity-Attribute-Value_), optou-se pela utilização de colunas do tipo `JSONB` nativas do PostgreSQL. Relacionamentos fortes que exigem integridade relacional estrita (como vínculo de categorias) mantêm o uso de tabelas clássicas e chaves estrangeiras.
 - **Mutações JSONB Atômicas em Query Única:** Para eliminar vulnerabilidades de condição de corrida (_Race Conditions_) entre o usuário enviando um `PATCH` e o Worker salvando dados em segundo plano, removeu-se completamente a necessidade de queries de `SELECT` prévias para a memória da aplicação. O controlador executa um `UPDATE` injetando o operador nativo de concatenação e merge do Postgres (`attributes || ?::jsonb`), garantindo isolamento thread-safe em nível de engine ACID.
@@ -143,7 +145,7 @@ docker compose -f docker-compose.prod.yml up --build
 
 Sob cenários de hiperescala e tráfego massivo em tempo real, as seguintes alterações estruturais seriam priorizadas:
 
-1. **Migração de Polling para Server-Sent Events (SSE):** Manter requisições HTTP repetitivas para milhões de usuários ativos inviabilizaria a performance da camada de API. O modelo seria substituído por conexões peristentes e unidirecionais via **SSE**. O backend passaria a notificar os navegadores disparando eventos orientados por tópicos via Redis Pub/Sub apenas no instante exato da conclusão do Job pelo Worker.
+1. **Migração de Polling para Server-Sent Events (SSE):** O modelo de short polling HTTP geraria milhões de conexões concorrentes desnecessárias. A API passaria a notificar os navegadores disparando eventos orientados por tópicos via Redis Pub/Sub apenas no instante exato da conclusão do Job pelo Worker.
 2. **Implementação de CQRS com Elasticsearch/Meilisearch:** A busca avançada textual e a filtragem complexa de dados NoSQL seriam totalmente desvinculadas das tabelas transacionais do PostgreSQL. Os produtos passariam a ser indexados e consumidos a partir de um motor de busca distribuído dedicado (**Elasticsearch**), mantendo o banco relacional exclusivo para inserções e atualizações rápidas.
 3. **Topologia de Réplicas de Leitura (Read Replicas):** O banco de dados PostgreSQL seria particionado e configurado para atuar com uma instância primária focada nas escritas estruturais e transações da fila, delegando toda a listagem de catálogos e consultas da API para múltiplos nós de réplicas exclusivas de leitura (_Read Replicas_).
 4. **Observabilidade e Logs Estruturados em JSON:** Remoção completa de logs genéricos de console, adotando uma biblioteca de alta performance (como o **Pino.js**) para canalizar logs padronizados em JSON estruturado, integrando de ponta a ponta o rastreio do Circuit Breaker e tempos de resposta com ferramentas de monitoramento de APM (Datadog ou stack Prometheus/Grafana).
