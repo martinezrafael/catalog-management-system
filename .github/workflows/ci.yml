@@ -64,5 +64,7 @@ jobs:
           cd backend
           npm install --no-audit --no-fund
 
-          npx dotenv -e ../.env.test -- npm run migrate
+          PGPASSWORD=test_password psql -h 127.0.0.1 -U test_user -d catalog_test -f migrations/01_initial_schema.sql
+          PGPASSWORD=test_password psql -h 127.0.0.1 -U test_user -d catalog_test -f migrations/02_add_performance_indexes.sql
+
           npm test
