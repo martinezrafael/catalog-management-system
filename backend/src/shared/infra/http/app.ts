@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import { env } from "../../../config/env.js";
 import { SearchProductController } from "../../../modules/products/infra/http/controllers/SearchProductController.js";
 import { CreateProductController } from "../../../modules/products/infra/http/controllers/CreateProductController.js";
 import { UpdateProductController } from "../../../modules/products/infra/http/controllers/UpdateProductController.js";
@@ -11,7 +12,7 @@ const app = express();
 
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: env.FRONTEND_URL,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
   }),

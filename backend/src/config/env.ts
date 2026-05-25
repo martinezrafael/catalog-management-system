@@ -16,6 +16,7 @@ const envSchema = z.object({
   FAKE_STORE_API_URL: z.string().url({
     message: "A FAKE_STORE_API_URL precisa ser uma URL válida",
   }),
+  FRONTEND_URL: z.string().url().default("http://localhost:3000"),
 });
 
 const _env = envSchema.safeParse(process.env);

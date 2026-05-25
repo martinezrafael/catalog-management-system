@@ -30,19 +30,25 @@ export class UpdateProductController {
       ];
       blacklistedKeys.forEach((key) => delete fieldsToUpdate.attributes[key]);
 
-      const [currentProduct] = await db("products")
+      const attributesPayload = JSON.stringify(fieldsToUpdate.attributes);
+      delete fieldsToUpdate.attributes;
+
+      const [updatedProduct] = await db("products")
         .where({ id })
-        .select("attributes");
-      fieldsToUpdate.attributes = {
-        ...currentProduct.attributes,
-        ...fieldsToUpdate.attributes,
-      };
+        .update({
+          ...fieldsToUpdate,
+          attributes: db.raw("attributes || ?::jsonb", [attributesPayload]),
+        })
+        .returning("*");
+
+      return res.status(200).json(updatedProduct);
     }
 
     const [updatedProduct] = await db("products")
       .where({ id })
       .update(fieldsToUpdate)
       .returning("*");
+
     return res.status(200).json(updatedProduct);
   }
 
@@ -50,13 +56,18 @@ export class UpdateProductController {
     const { id } = req.params;
     const { category_ids } = req.body;
 
-    await db("product_categories").where({ product_id: id }).del();
-    await db("product_categories").insert(
-      category_ids.map((catId: number) => ({
-        product_id: id,
-        category_id: catId,
-      })),
-    );
+    await db.transaction(async (trx) => {
+      await trx("product_categories").where({ product_id: id }).del();
+
+      if (category_ids && category_ids.length > 0) {
+        await trx("product_categories").insert(
+          category_ids.map((catId: number) => ({
+            product_id: id,
+            category_id: catId,
+          })),
+        );
+      }
+    });
 
     return res.status(204).send();
   }
