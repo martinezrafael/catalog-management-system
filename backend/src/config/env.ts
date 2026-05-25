@@ -6,20 +6,24 @@ const envSchema = z.object({
     .enum(["development", "test", "production"])
     .default("development"),
   PORT: z.coerce.number().default(3000),
-  DATABASE_URL: z.url({
+  DATABASE_URL: z.string().url({
     message: "A DATABASE_URL precisa ser uma URL válida de conexão",
   }),
-  REDIS_URL: z.url("A REDIS_URL precisa ser uma URL válida"),
+  REDIS_URL: z.string().url({
+    message: "A REDIS_URL precisa ser uma URL válida",
+  }),
   REDIS_PASSWORD: z.string().min(1, "A REDIS_PASSWORD é obrigatória"),
-  FAKE_STORE_API_URL: z.url("A FAKE_STORE_API_URL precisa ser uma URL válida"),
+  FAKE_STORE_API_URL: z.string().url({
+    message: "A FAKE_STORE_API_URL precisa ser uma URL válida",
+  }),
 });
 
 const _env = envSchema.safeParse(process.env);
 
 if (!_env.success) {
-  console.error("Invalid environment variables:");
+  console.error("❌ Erro de validação nas variáveis de ambiente:");
   _env.error.issues.forEach((issue) => {
-    console.error(`  - ${issue.path.join(".")}: ${issue.message}`);
+    console.error(`  - Campo [${issue.path.join(".")}]: ${issue.message}`);
   });
   throw new Error("Invalid environment variables.");
 }

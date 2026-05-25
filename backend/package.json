@@ -8,7 +8,8 @@
     "start:api": "tsx src/shared/infra/http/server.ts",
     "start:worker": "tsx src/modules/products/workers/EnrichmentWorker.ts",
     "migrate": "knex migrate:latest --client pg --connection $DATABASE_URL --migrations-directory ./migrations",
-    "start:api:dev": "npm run migrate && npm run start:api"
+    "start:api:dev": "npm run migrate && npm run start:api",
+    "test": "dotenv -e ../.env.test -- node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit"
   },
   "keywords": [],
   "author": "",
@@ -34,8 +35,11 @@
     "@types/node": "^25.9.1",
     "@types/opossum": "^8.1.9",
     "@types/supertest": "^7.2.0",
+    "dotenv-cli": "^11.0.0",
+    "jest": "^30.4.2",
     "nock": "^14.0.15",
     "supertest": "^7.2.2",
+    "ts-jest": "^29.4.11",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3"
   }

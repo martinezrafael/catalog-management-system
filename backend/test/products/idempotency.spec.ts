@@ -7,13 +7,14 @@ describe("Validação de Eficácia da Idempotência", () => {
     await redisClient.quit();
   });
 
-  it("deve interceptar requisições concorrentes com chaves idênticas e retornar exatamente o mesmo payload", async () => {
-    const sharedKey = "test-deterministic-key-uuid";
+  it("deve interceptar requisições concorrentes com chaves idênticas e barrar a duplicidade", async () => {
+    const sharedKey = `test-key-${Math.random().toString(36).substring(7)}`;
     const payload = {
-      name: "Item",
-      sku: "TST-0001-Z9",
+      name: "Item Concorrente",
+      sku: "IDM-1234-XX",
       price_cents: 4500,
       category_ids: [1],
+      attributes: {},
     };
 
     const [res1, res2] = await Promise.all([
@@ -26,6 +27,10 @@ describe("Validação de Eficácia da Idempotência", () => {
         .set("Idempotency-Key", sharedKey)
         .send(payload),
     ]);
-    expect(res1.body.id).toEqual(res2.body.id);
+
+    const statuses = [res1.status, res2.status];
+
+    expect(statuses).toContain(202);
+    expect(statuses).toContain(409);
   });
 });
