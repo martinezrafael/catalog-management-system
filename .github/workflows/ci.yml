@@ -16,7 +16,7 @@ jobs:
         with:
           node-version: 20
       - name: Install Backend Deps
-        run: cd backend && npm ci
+        run: cd backend && npm install --no-audit --no-fund
       - name: Typecheck Backend
         run: cd backend && npx tsc --noEmit
 
@@ -62,7 +62,7 @@ jobs:
           echo "FRONTEND_URL=http://localhost:3000" >> .env.test
 
           cd backend
-          npm ci
+          npm install --no-audit --no-fund
 
           npx dotenv -e ../.env.test -- npm run migrate
           npm test
