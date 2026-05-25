@@ -4,13 +4,20 @@ import { redisClient } from "../../src/shared/infra/cache/redis.js";
 import { queueRedisConnection } from "../../src/shared/infra/queues/bullmq.js";
 
 describe("Validação de Eficácia da Idempotência", () => {
+  let createdTestKey = "";
+
   afterAll(async () => {
+    if (createdTestKey) {
+      await redisClient.del(`idempotency:${createdTestKey}`);
+    }
     await redisClient.quit();
     await queueRedisConnection.quit();
   });
 
   it("deve interceptar requisições concorrentes com chaves idênticas e barrar a duplicidade", async () => {
     const sharedKey = `test-key-${Math.random().toString(36).substring(7)}`;
+    createdTestKey = sharedKey; // Salva para o bloco afterAll limpar
+
     const payload = {
       name: "Item Concorrente",
       sku: "IDM-1234-XX",
@@ -19,7 +26,6 @@ describe("Validação de Eficácia da Idempotência", () => {
       attributes: {},
     };
 
-    // Executa os disparos HTTP concorrentes de forma estritamente simultânea
     const [res1, res2] = await Promise.all([
       supertest(app)
         .post("/api/v1/products")
