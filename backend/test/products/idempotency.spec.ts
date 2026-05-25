@@ -2,9 +2,17 @@ import supertest from "supertest";
 import { app } from "../../src/shared/infra/http/app.js";
 import { redisClient } from "../../src/shared/infra/cache/redis.js";
 import { queueRedisConnection } from "../../src/shared/infra/queues/bullmq.js";
+import { db } from "../../src/shared/infra/database/postgres.js";
 
 describe("Validação de Eficácia da Idempotência", () => {
   let createdTestKey = "";
+
+  beforeAll(async () => {
+    await db("categories")
+      .insert({ id: 1, name: "Eletrônicos" })
+      .onConflict("id")
+      .ignore();
+  });
 
   afterAll(async () => {
     if (createdTestKey) {
