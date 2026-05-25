@@ -1,87 +1,81 @@
 # Sistema de Gerenciamento de Catálogo de Produtos
 
-Este repositório contém uma arquitetura distribuída e assíncrona desenvolvida para o processamento de catálogos de produtos com alta vazão e tolerância a falhas. O ecossistema dissocia o recebimento de requisições HTTP da execução de tarefas pesadas de rede (enriquecimento de dados de terceiros) utilizando mensageria baseada em filas controladas.
+Este repositório contém uma arquitetura distribuída e assíncrona voltada para o processamento de catálogos de produtos com alta vazão e tolerância a falhas. O ecossistema dissocia o recebimento de requisições HTTP da execução de tarefas pesadas de rede (enriquecimento de dados) utilizando mensageria baseada em filas controladas.
 
 ---
 
-## 1. Instruções para Execução e Testes (Ambiente Local)
+## 1. Gestão e Configuração de Ambientes (.env)
 
-Siga os passos abaixo para inicializar o ecossistema completo na sua máquina.
+O sistema adota uma estratégia de segregação de configurações baseada no padrão de doze fatores (12-Factor App). A aplicação é totalmente controlada por três escopos de arquivos de ambiente distintos:
 
-### Pré-requisitos
+- **`.env.example` (Gabarito Estrutural):** Arquivo público monitorado pelo Git que serve de modelo para a inicialização do projeto. Ele lista todas as chaves obrigatórias exigidas pela validação de esquema do Zod, sem expor credenciais reais ou senhas de produção.
+- **`.env.test` (Isolamento de Testes):** Arquivo público com as configurações estritas e conexões exclusivas voltadas para a suíte de testes de integração e concorrência. Ele garante que a execução do Jest opere em bancos de dados e caches efêmeros, impedindo que as limpezas de tabelas feitas pelos testes apaguem os dados gerados no seu ambiente de desenvolvimento.
+- **`.env` (Execução Runtime Local):** Arquivo privado e ignorado pelo Git (`.gitignore`) que deve ser criado manualmente na raiz do projeto antes da inicialização. Ele define as credenciais locais que serão injetadas diretamente nos contêineres do Docker Compose.
 
-- Docker e Docker Compose instalados.
+### Passo 1: Criação do arquivo `.env` local
 
-### Passo 1: Configuração das Variáveis de Ambiente
-
-Crie um ficheiro chamado **`.env`** na raiz do projeto (no mesmo nível deste arquivo README). Copie e cole o seguinte bloco padrão dentro do seu ficheiro `.env` para garantir a inicialização de todos os serviços conteinerizados:
+Para rodar os contêineres localmente, crie o arquivo **`.env`** na raiz do repositório utilizando o conteúdo abaixo como definição padrão para o funcionamento do ambiente:
 
 ```env
-# Configurações do PostgreSQL (Infraestrutura)
-POSTGRES_USER=postgres
+# ==============================================================================
+# CONFIGURAÇÕES DA INFRAESTRUTURA (Lidas diretamente pelo docker-compose.yml)
+# ==============================================================================
+POSTGRES_USER=admin
 POSTGRES_PASSWORD=secretpassword
 POSTGRES_DB=catalog_management
 
-# Configurações do Redis (Infraestrutura)
 REDIS_PASSWORD=redissecuredpassword
 
-# Configurações de Conexão do Backend (API e Worker)
-NODE_ENV=development
+# ==============================================================================
+# CONFIGURAÇÕES DO BACKEND (Injetadas nos containers da API e do Worker)
+# ==============================================================================
+NODE_ENV=production
 PORT=3333
-DATABASE_URL=postgres://postgres:secretpassword@postgres:5432/catalog_management
+
+DATABASE_URL=postgres://admin:secretpassword@postgres:5432/catalog_management
 REDIS_URL=redis://redis:6379
 FAKE_STORE_API_URL=https://fakestoreapi.com
 
-# Configurações de Comunicação do Frontend
-FRONTEND_URL=http://localhost:3000
+# URL do frontend permitida pelo CORS do Backend
+# Desenvolvimento Local (docker-compose.yml): http://localhost:3000
+# Produção Local (docker-compose.prod.yml): http://localhost
+FRONTEND_URL=http://localhost
+
+# ==============================================================================
+# CONFIGURAÇÕES DO FRONTEND
+# ==============================================================================
 VITE_API_URL=http://localhost:3333
 
 ```
 
-### Isolamento do Ambiente de Testes (.env.test)
-
-- **Função do .env.test:** O projeto possui o ficheiro `.env.test` pré-configurado na raiz para isolar a execução dos testes automatizados de integração e concorrência. Ele força a suíte a apontar para uma base de dados e cache paralelos. Isso garante que os comandos de limpeza executados pelo Jest antes de cada teste não apaguem ou corrompam os dados salvos no seu ambiente de desenvolvimento local.
-
 ### Passo 2: Inicialização da Aplicação (Modo Desenvolvimento)
 
-Para construir as imagens e inicializar os containers limpando resquícios de volumes antigos, execute o comando abaixo no terminal da raiz do projeto:
+Se desejar executar a aplicação com sincronização de volumes locais e recarregamento automático (hot-reloading), execute na raiz do repositório:
 
 ```bash
 docker compose down -v && docker compose up --build
 
 ```
 
-_Nota: Este comando iniciará 5 serviços locais: Banco de Dados PostgreSQL, Cache/Fila Redis, API HTTP Node.js, Worker de Segundo Plano BullMQ e a SPA Frontend em React (Vite). Os scripts de inicialização do banco rodarão as migrações estruturais e índices de performance de forma totalmente automatizada._
+_Portas de acesso:_ Frontend em `http://localhost:3000` | API Rest em `http://localhost:3333`.
 
-### Passo 3: Verificação de Acesso
+### Passo 3: Inicialização Otimizada (Modo Produção / AWS Ready)
 
-Assim que os logs do terminal estabilizarem, as interfaces estarão disponíveis em:
-
-- **Interface do Usuário (React SPA):** `http://localhost:3000`
-- **API Rest Endpoints:** `http://localhost:3333`
-
-### Passo 4: Execução da Suíte de Testes Automatizados
-
-Os testes de integração e concorrência rodam com base nas configurações isoladas do `.env.test`. Para executá-los:
-
-1. Abra um novo terminal na pasta **`backend/`**.
-2. Execute o comando:
-
-```bash
-npm run test
-
-```
-
-### Passo 5: Execução em Imagem Otimizada (Modo Produção/AWS Ready)
-
-Caso queira testar o comportamento do sistema simulando um deploy de produção (onde o TypeScript é compilado para JavaScript nativo dentro de `dist/`, dependências de desenvolvimento são omitidas e o frontend compilado é servido via Nginx na porta 80), execute:
+Para rodar a aplicação simulando o comportamento de nuvem (TypeScript compilado para JavaScript puro dentro da pasta `dist`, dependências de desenvolvimento omitidas e frontend servido de forma estática via Nginx na porta 80), utilize:
 
 ```bash
 docker compose down -v && docker compose -f docker-compose.prod.yml up --build
 
 ```
 
-_Nota: A interface web neste modo passará a ser servida diretamente na porta HTTP padrão:_ `http://localhost`.
+_Portas de acesso:_ Frontend em `http://localhost` | API Rest em `http://localhost:3333`.
+
+### Passo 4: Execução da Suíte de Testes Automatizados
+
+O comando de testes ignora o arquivo `.env` e carrega exclusivamente o arquivo `.env.test` para preservar as bases. Para rodar a cobertura:
+
+1. Navegue até a pasta do backend: `cd backend`
+2. Execute o script: `npm run test`
 
 ---
 
@@ -97,7 +91,7 @@ _Nota: A interface web neste modo passará a ser servida diretamente na porta HT
 
 **Pergunta:** Ao receber uma demanda vaga da área de negócio, quais etapas você segue para transformá-la em uma especificação técnica pronta para desenvolvimento?
 
-**Resposta:** Para transformar uma demanda vaga em uma especificação técnica pronta, eu sigo um processo de refinamento focado em extrair o valor real do negócio e blindar o escopo. Primeiro, faço uma reunião de alinhamento com a área de negócio para entender a dor que querem resolver (o "porquê") e o resultado esperado, traduzindo a ideia para o formato de User Stories (Quem, O quê e Para quê). En seguida, defino claramente o escopo estipulando os Critérios de Aceite (o que a functionalidade deve fazer) e, o mais importante, o que está fora do escopo para evitar o aumento do projeto no meio do caminho. Depois, passo para a análise técnica: mapeio os impactos na arquitetura atual, desenho as mudanças no banco de dados e modulo as novas APIs ou contratos de integração. Por fim, divido essa especificação em tarefas menores, claras e pontuadas (tasks), adicionando cenários de testes e diagramas de fluxo se necessário. A entrega é um documento pronto onde o desenvolvedor sabe exatamente o que codificar e como testar, sem margem para suposições.
+**Resposta:** Para transformar uma demanda vaga em uma especificação técnica pronta, eu sigo um processo de refinamento focado em extrair o valor real do negócio e blindar o escopo. Primeiro, faço uma reunião focado no alinhamento com a área de negócio para entender a dor que querem resolver (o "porquê") e o resultado esperado, traduzindo a ideia para o formato de User Stories (Quem, O quê e Para quê). Em seguida, defino claramente o escopo estipulando os Critérios de Aceite (o que a funcionalidade deve fazer) e, o mais importante, o que está fora do escopo para evitar o aumento do projeto no meio do caminho. Depois, passo para a análise técnica: mapeio os impactos na arquitetura atual, desenho as mudanças no banco de dados e modulo as novas APIs ou contratos de integração. Por fim, divido essa especificação em tarefas menores, claras e pontuadas (tasks), adicionando cenários de testes e diagramas de fluxo se necessário. A entrega é um documento pronto onde o desenvolvedor sabe exatamente o que codificar e como testar, sem margem para suposições.
 
 ### Idempotência
 
@@ -115,11 +109,11 @@ _Nota: A interface web neste modo passará a ser servida diretamente na porta HT
 
 **Pergunta:** Quais controles mínimos de segurança você aplica em uma API exposta publicamente?
 
-**Resposta:** Para proteger uma API exposta publicamente, eu aplico controles mínimos focados em autenticação, integridade e proteção de recursos. Primeiro, exijo criptografia em trânsito usando TLS/HTTPS e implemento autenticação robusta via OAuth2 ou JWT, garantindo que apenas usuários validados acessem os recursos. Para mitigar ataques de negação de serviço (DoS) e abusos automatizados, configuro Rate Limiting direto no API Gateway. Toda informação recebida passa por uma validação rigorosa de payload para impedir ataques de injeção (como SQL Injection). Por fim, aplico o princípio do menor privilégio através de Controle de Acesso Baseado em Funções (RBAC), escondo detalhes da infraestrutura tratando mensagens de erro genéricas e mantenho auditoria e logs estruturados para monitorar comportamentos suspeitos em tempo real.
+**Resposta:** Para proteger uma API exposta publicamente, eu aplico controles mínimos focados em autenticação, integridade e proteção de recursos. Primeiro, exijo criptografia em trânsito usando TLS/HTTPS e implemento autenticação robusta via OAuth2 ou JWT, garantindo que apenas usuários validados acessem os recursos. Para mitigar ataques de negação de serviço (DoS) e abusos automatizados, configuro Rate Limiting direto no API Gateway. Toda informação recebida passa por uma validação rigorosa de payload para impedir ataques de injeção (como SQL Injection). Por fim, aplico o princípio do menor privilégio através de Controle de Acesso Baseado em Funções (RBAC), escondo detalhes da infraestrutura tratando mensagens de erro genéricas e mantém auditoria e logs estruturados para monitorar comportamentos suspeitos em tempo real.
 
 ### Qualidade e Entrega
 
-**Pergunta:** Como você decide o que é essencial para uma primeira versão (MVP) e o que deve ser tratado como débito técnico ou melhoria futuro?
+**Pergunta:** Como você decide o que é essencial para uma primeira versão (MVP) e o que deve ser tratado como débito técnico ou melhoria futura?
 
 **Resposta:** Para definir o escopo de um MVP, eu aplico o critério do valor mínimo para o negócio e para o usuário: se a funcionalidade for removida e o produto perder o seu propósito principal ou deixar de resolver a dor central do cliente, ela é essencial. Todo o restante, como automações complexas, otimizações extremas de performance e recursos secundários, é jogado para o backlog de melhorias. O que vira débito técnico consciente são as escolhas de arquitetura feitas para acelerar a entrega, como usar uma infraestrutura mais simples e monolítica ou implementar um processo manual nos bastidores (o famoso "fazer fumaça") para validar a demanda antes de construir um sistema automatizado robusto. O limite dessa linha é a segurança e a integridade dos dados, que nunca devem ser negligenciadas; se o atalho colocar em risco as informações do cliente ou inviabilizar a evolução futura do código, ele deixa de ser débito técnico aceitável e se torna um erro de engenharia.
 
@@ -133,26 +127,26 @@ _Nota: A interface web neste modo passará a ser servida diretamente na porta HT
 
 ## 3. Decisões Técnicas e Trade-offs Realizados
 
-- **Desacoplamento Arquitetural (API vs. Worker):** O core da aplicação foi cindido em duas instâncias isoladas. Quando um produto é ingerido, a API executa validações de contrato síncronas via Zod, persiste o registro local com o status temporário `PROCESSING` e retorna `HTTP 202 Accepted` em poucos milissegundos. O processamento pesado de rede fica delegeado ao `EnrichmentWorker.ts` operando sob o BullMQ/Redis em background. O trade-off envolve a necessidade de pooling por parte da interface visual, porém garante imunidade da API contra travamentos por estouro de conexões síncronas.
-- **Consistência Relacional Atômica na Ingestão:** Toda a lógica de inserção do produto básico e amarração de chaves estrangeiras na tabela `product_categories` foi encapsulada dentro de uma transação explícita do Knex (`db.transaction`). Isso assegura que, caso ocorra qualquer falha de barramento ou persistência no meio da requisição, o banco execute o _rollback_ imediato. Evita-se, assim, a existência de registros órfãos ou inconsistentes na base de dados.
-- **Armazenamento Híbrido (Relacional + JSONB):** Para acomodar propriedades flexíveis e dinâmicas de metadados externos sem a adoção de esquemas complexos e custosos como EAV (_Entity-Attribute-Value_), optou-se pela utilização de colunas do tipo `JSONB` nativas do PostgreSQL. Relacionamentos fortes que exigem integridade relacional estrita (como vínculo de categorias) mantêm o uso de tabelas clássicas e chaves estrangeiras.
-- **Mutações JSONB Atômicas em Query Única:** Para eliminar vulnerabilidades de condição de corrida (_Race Conditions_) entre o usuário enviando um `PATCH` e o Worker salvando dados em segundo plano, removeu-se completamente a necessidade de queries de `SELECT` prévias para a memória da aplicação. O controlador executa um `UPDATE` injetando o operador nativo de concatenação e merge do Postgres (`attributes || ?::jsonb`), garantindo isolamento thread-safe em nível de engine ACID.
-- **Short Polling Frontend Controlado:** O frontend foi projetado com um temporizador cíclico reativo de 3 segundos para sincronizar as mudanças de status da fila assíncrona. No entanto, introduziu-se um curto-circuito condicional via `.some()` que verifica se existem registros no estado `PROCESSING` em exibição. Se a listagem estiver estável, o `setInterval` não é alocado, eliminando requisições repetitivas inúteis contra o backend.
+- **Desacoplamento de Contexto (API vs. Worker):** O núcleo do sistema é cindido em duas instâncias de execução isoladas. No momento de ingestão do produto, a API executa validações rápidas de contrato, persiste o registro básico com o status temporário `PROCESSING` e responde imediatamente com `HTTP 202 Accepted`. O processamento pesado de rede fica delegado ao worker em segundo plano utilizando o ecossistema BullMQ/Redis. O trade-off envolve a necessidade de pooling na interface visual, mas blinda a API contra exaustão de conexões HTTP.
+- **Transações Relacionais ACID na Ingestão:** Toda a lógica de inserção inicial do produto e vinculação com suas categorias associadas está centralizada sob o escopo de uma transação transacional gerenciada pelo Knex (`db.transaction`). Caso ocorra qualquer instabilidade de barramento ou erro na inserção relacional múltipla, o PostgreSQL executa o _rollback_ imediato, impedindo produtos com dados incompletos ou órfãos na base.
+- **Armazenamento Híbrido Relacional + NoSQL (JSONB):** A modelagem adota tabelas e chaves estrangeiras rígidas para elementos estruturais estáveis (vínculo de categorias). Propriedades flexíveis, metadados dinâmicos e payloads resultantes do enriquecimento externo são alocados em campos binários NoSQL (`JSONB`) na tabela de produtos. O trade-off elimina a complexidade estrutural de modelagens EAV (_Entity-Attribute-Value_) e evita migrações custosas a cada nova propriedade adicionada.
+- **Mutações JSONB Atômicas em Query Única:** Para anular brechas de condições de corrida (_Race Conditions_) entre ações concomitantes do usuário via `PATCH` e a finalização assíncrona do Worker, o controlador executa atualizações atômicas diretamente na query SQL usando o operador nativo de concatenação e fusão do Postgres (`attributes || ?::jsonb`). Isso dispensa um `SELECT` prévio e assegura consistência em nível de engine.
+- **Short Polling Frontend Otimizado:** O frontend atualiza as informações consultando o servidor a cada 3 segundos. Contudo, o ciclo do temporizador é condicional e reativo: ele analisa o estado atual da tela usando `.some()` e aloca o loop apenas enquanto houver registros no status provisório `PROCESSING`. Quando os produtos chegam ao estado final, o loop é interrompido automaticamente, poupando requisições na API.
 
 ---
 
 ## 4. Plano de Evolução Arquitetural (Cenário de 1 Milhão de Acessos)
 
-Sob cenários de hiperescala e tráfego massivo em tempo real, as seguintes alterações estruturais seriam priorizadas:
+Caso o ecossistema mude para um cenário corporativo de altíssima escala, as seguintes atualizações seriam priorizadas:
 
-1. **Migração de Polling para Server-Sent Events (SSE):** O modelo de short polling HTTP geraria milhões de conexões concorrentes desnecessárias. A API passaria a notificar os navegadores disparando eventos orientados por tópicos via Redis Pub/Sub apenas no instante exato da conclusão do Job pelo Worker.
-2. **Implementação de CQRS com Elasticsearch/Meilisearch:** A busca avançada textual e a filtragem complexa de dados NoSQL seriam totalmente desvinculadas das tabelas transacionais do PostgreSQL. Os produtos passariam a ser indexados e consumidos a partir de um motor de busca distribuído dedicado (**Elasticsearch**), mantendo o banco relacional exclusivo para inserções e atualizações rápidas.
-3. **Topologia de Réplicas de Leitura (Read Replicas):** O banco de dados PostgreSQL seria particionado e configurado para atuar com uma instância primária focada nas escritas estruturais e transações da fila, delegando toda a listagem de catálogos e consultas da API para múltiplos nós de réplicas exclusivas de leitura (_Read Replicas_).
-4. **Observabilidade e Logs Estruturados em JSON:** Remoção completa de logs genéricos de console, adotando uma biblioteca de alta performance (como o **Pino.js**) para canalizar logs padronizados em JSON estruturado, integrando de ponta a ponta o rastreio do Circuit Breaker e tempos de resposta com ferramentas de monitoramento de APM (Datadog ou stack Prometheus/Grafana).
+1. **Substituição de Polling por Server-Sent Events (SSE):** Manter loops HTTP contra a API para milhões de usuários geraria overhead desnecessário nos servidores. Adotaríamos conexões persistentes via streams unidirecionais de **SSE**. A API passaria a empurrar as notificações reativas de atualização aos navegadores em tempo real, disparadas por canais de Pub/Sub do Redis assim que o Worker concluísse a tarefa.
+2. **Arquitetura de CQRS com Elasticsearch/Meilisearch:** Desvincular as pesquisas textuais, filtros de categorias e buscas avançadas do banco de dados relacional. Os dados de produtos estáveis seriam espelhados de forma automática em um motor de busca distribuído focado em leitura rápida (**Elasticsearch**), mantendo o PostgreSQL otimizado puramente para transações de escritas e mutações.
+3. **Topologia de Banco com Réplicas de Leitura:** O banco de dados relacional seria configurado com um nó principal isolado para escritas (_Primary Instance_) e um cluster de múltiplas réplicas assíncronas assinaladas exclusivamente para a leitura de catálogos (_Read Replicas_), distribuindo o tráfego de busca de forma balanceada.
+4. **Observabilidade e Telemetria Estruturada:** Substituição de logs textuais de console pelo uso de um formatador estruturado em formato JSON (como o **Pino.js**). Isso permitiria canalizar e centralizar os rastreios do Circuit Breaker, logs de erro e taxas de vazão diretamente para coletores de métricas APM (como Datadog ou stack Prometheus/Grafana).
 
 ---
 
 ## 5. Cobertura de Testes e Qualidade de Software
 
-- **Garantia de Fluxos Críticos de Negócio:** A suíte contém testes integrados que simulam alta concorrência simultânea para chaves de Idempotência, validações de isolamento de contratos DTO, comportamento sob falhas simuladas de serviços externos via `nock` e barramento preventivo de vazão por Rate Limiting.
-- **Pipeline Automatizado Executável (CI/CD):** Integração contínua configurada via **GitHub Actions**. O fluxo baixa o repositório, levanta containers efêmeros e isolados de PostgreSQL e Redis no ambiente do runner do GitHub, executa checagem de tipos restrita do TypeScript (`tsc --noEmit`) e roda toda a bateria de testes integrados a cada push ou pull request aberto nas branches principais.
+- **Garantia de Fluxos Críticos:** A suíte contém testes integrados cobrindo concorrência simultânea para chaves de Idempotência, validações de isolamento de contratos DTO via Zod, comportamento sob falhas de serviços externos via mocks do `nock` e barramento preventivo de vazão por Rate Limiting.
+- **Garantia de Pipeline Verde (CI/CD):** Integração contínua configurada via **GitHub Actions**. O fluxo baixa o repositório, instala dependências, valida a tipagem estrita do TypeScript (`tsc --noEmit`) e levanta contêineres efêmeros e isolados de PostgreSQL e Redis no runner para rodar todos os testes automatizados a cada push ou pull request aberto nas branches principais.
