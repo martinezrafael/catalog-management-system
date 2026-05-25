@@ -7,28 +7,31 @@ export class CreateProductController {
   async handle(req: Request, res: Response): Promise<Response> {
     const productData = req.body;
 
-    const [product] = await db("products")
-      .insert({
-        name: productData.name,
-        description: productData.description,
-        sku: productData.sku,
-        price_cents: productData.price_cents,
-        attributes: JSON.stringify(productData.attributes),
-        status: "PROCESSING",
-      })
-      .returning("*");
+    const httpResponse = await db.transaction(async (trx) => {
+      const [product] = await trx("products")
+        .insert({
+          name: productData.name,
+          description: productData.description,
+          sku: productData.sku,
+          price_cents: productData.price_cents,
+          attributes: JSON.stringify(productData.attributes),
+          status: "PROCESSING",
+        })
+        .returning("*");
 
-    await db("product_categories").insert(
-      productData.category_ids.map((catId: number) => ({
-        product_id: product.id,
-        category_id: catId,
-      })),
-    );
+      await trx("product_categories").insert(
+        productData.category_ids.map((catId: number) => ({
+          product_id: product.id,
+          category_id: catId,
+        })),
+      );
 
-    const jobPayload = { productId: product.id, sku: product.sku };
-    await productQueue.add("enrich_product", jobPayload);
+      const jobPayload = { productId: product.id, sku: product.sku };
 
-    const httpResponse = { id: product.id, status: product.status };
+      await productQueue.add("enrich_product", jobPayload);
+
+      return { id: product.id, status: product.status };
+    });
 
     if (req.idempotencyCacheKey) {
       await redisClient.set(
