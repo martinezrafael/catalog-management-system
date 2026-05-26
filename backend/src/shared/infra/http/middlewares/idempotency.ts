@@ -1,6 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 import { redisClient } from "../../cache/redis.js";
 
+const IDEMPOTENCY_TTL_SECONDS = 300;
+
 declare global {
   namespace Express {
     interface Request {
@@ -13,9 +15,12 @@ export async function ensureIdempotency(
   req: Request,
   res: Response,
   next: NextFunction,
-) {
+): Promise<void | Response> {
   const idempotencyKey = req.headers["idempotency-key"];
-  if (!idempotencyKey) return next();
+
+  if (!idempotencyKey) {
+    return next();
+  }
 
   const cacheKey = `idempotency:${idempotencyKey}`;
   const savedResponse = await redisClient.get(cacheKey);
@@ -27,18 +32,19 @@ export async function ensureIdempotency(
 
   const lockAcquired = await redisClient.set(
     cacheKey,
-    JSON.stringify({ status: 202, body: { message: "Processando..." } }),
+    JSON.stringify({ status: 202, body: { message: "Processing request..." } }),
     "EX",
-    300,
+    IDEMPOTENCY_TTL_SECONDS,
     "NX",
   );
 
   if (!lockAcquired) {
-    return res
-      .status(409)
-      .json({ error: "Conflito de requisições. Tente novamente." });
+    return res.status(409).json({
+      error: "Conflict detected. This request is already being processed.",
+    });
   }
 
   req.idempotencyCacheKey = cacheKey;
-  next();
+
+  return next();
 }
