@@ -6,9 +6,16 @@ import { db } from "../../../../../shared/infra/database/postgres.js";
 const AdvancedSearchSchema = z.object({
   q: z.string().max(100, "Termo de busca excessivamente longo").optional(),
   status: z.enum(["PROCESSING", "PROCESSED", "FAILED"]).optional(),
-  category_id: z.coerce.number().int().positive().optional(),
+
+  category_id: z.coerce
+    .number({ message: "Category ID must be a valid number" })
+    .int()
+    .positive()
+    .optional(),
+
   color: z.string().optional(),
   size: z.string().optional(),
+
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
 });
