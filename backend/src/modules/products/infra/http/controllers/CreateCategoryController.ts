@@ -1,15 +1,10 @@
 import type { Request, Response } from "express";
 import { db } from "../../../../../shared/infra/database/postgres.js";
+import { CreateCategorySchema } from "../../../dtos/CreateCategoryDTO.js";
 
 export class CreateCategoryController {
   async handle(req: Request, res: Response): Promise<Response> {
-    const { name } = req.body;
-
-    if (!name || name.trim() === "") {
-      return res.status(400).json({
-        error: "O nome da categoria é obrigatório e não pode ser vazio.",
-      });
-    }
+    const { name } = CreateCategorySchema.parse(req.body);
 
     const categoryExists = await db("categories").where({ name }).first();
     if (categoryExists) {
@@ -18,9 +13,7 @@ export class CreateCategoryController {
       });
     }
 
-    const [category] = await db("categories")
-      .insert({ name: name.trim() })
-      .returning("*");
+    const [category] = await db("categories").insert({ name }).returning("*");
 
     return res.status(201).json(category);
   }
