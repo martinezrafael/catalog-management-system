@@ -1,13 +1,9 @@
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import cors from "cors";
+import { z } from "zod";
 import { env } from "../../../config/env.js";
-import { SearchProductController } from "../../../modules/products/infra/http/controllers/SearchProductController.js";
-import { CreateProductController } from "../../../modules/products/infra/http/controllers/CreateProductController.js";
-import { UpdateProductController } from "../../../modules/products/infra/http/controllers/UpdateProductController.js";
-import { CreateCategoryController } from "../../../modules/products/infra/http/controllers/CreateCategoryController.js";
-import { SearchCategoryController } from "../../../modules/products/infra/http/controllers/SearchCategoryController.js";
-import { ensureIdempotency } from "./middlewares/idempotency.js";
+import { routes } from "./routes.js";
 
 const app = express();
 
@@ -21,31 +17,28 @@ app.use(
 
 app.use(express.json());
 
-const createProductController = new CreateProductController();
-const searchProductController = new SearchProductController();
-const updateProductController = new UpdateProductController();
-const createCategoryController = new CreateCategoryController();
-const searchCategoryController = new SearchCategoryController();
+app.use("/api/v1", routes);
 
-app.post("/api/v1/products", ensureIdempotency, createProductController.handle);
-app.get("/api/v1/products", searchProductController.index);
-app.put("/api/v1/products/:id", updateProductController.put);
-app.patch("/api/v1/products/:id", updateProductController.patch);
-app.put(
-  "/api/v1/products/:id/categories",
-  updateProductController.updateCategories,
+app.use(
+  (err: Error, req: Request, res: Response, _next: NextFunction): Response => {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({
+        status: "validation_error",
+        message: "Invalid request payload attributes.",
+        errors: err.issues.map((issue: z.ZodIssue) => ({
+          field: issue.path.join("."),
+          message: issue.message,
+        })),
+      });
+    }
+
+    console.error("[HTTP] Uncaught application exception:", err);
+
+    return res.status(500).json({
+      status: "error",
+      message: "Internal server error.",
+    });
+  },
 );
-
-app.post("/api/v1/categories", createCategoryController.handle);
-app.get("/api/v1/categories", searchCategoryController.index);
-
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error("❌ Erro capturado na API:", err);
-
-  res.status(500).json({
-    status: "error",
-    message: "Internal server error",
-  });
-});
 
 export { app };
