@@ -1,19 +1,23 @@
 import { env } from "../../../config/env.js";
-import { Redis } from "ioredis";
+import { Redis, type RedisOptions } from "ioredis";
 
-export const redisClient = new Redis(env.REDIS_URL, {
+const redisOptions: RedisOptions = {
   password: env.REDIS_PASSWORD,
+
   maxRetriesPerRequest: null,
+
   reconnectOnError: (err: Error) => {
     const targetError = "READONLY";
-    if (err.message.includes(targetError)) {
-      return true;
-    }
-    return false;
+    return err.message.includes(targetError);
   },
+};
+
+export const redisClient = new Redis(env.REDIS_URL, redisOptions);
+
+redisClient.on("connect", () => {
+  console.log("[Redis] Connection estabilished succesfully");
 });
 
-redisClient.on("connect", () => console.log("Redis conectado com sucesso."));
-redisClient.on("error", (err: unknown) =>
-  console.error("Erro no cliente Redis:", err),
-);
+redisClient.on("error", (err: unknown) => {
+  console.error("[Redis] Client connection error", err);
+});
