@@ -5,22 +5,22 @@ import { z } from "zod";
 import { db } from "../../../shared/infra/database/postgres.js";
 import { queueRedisConnection } from "../../../shared/infra/queues/bullmq.js";
 
-// ==============================================================================
-// 1. SCHEMAS DE VALIDAÇÃO (Zod v4)
-// ==============================================================================
-
-// Garante o contrato de dados com a API externa em tempo de execução (Runtime)
 const FakeStoreProductSchema = z.object({
+  id: z.coerce.number().int().positive(),
   title: z.string(),
-  category: z.string(),
   price: z.coerce.number().nonnegative(),
+  description: z.string().optional().default(""),
+  category: z.string(),
+  image: z.string().url().optional(),
+  rating: z
+    .object({
+      rate: z.coerce.number(),
+      count: z.coerce.number().int(),
+    })
+    .optional(),
 });
 
 type FakeStoreProduct = z.infer<typeof FakeStoreProductSchema>;
-
-// ==============================================================================
-// 2. CONFIGURAÇÕES E CIRCUIT BREAKER
-// ==============================================================================
 
 const breakerOptions = {
   timeout: 3000,
@@ -42,10 +42,6 @@ const externalApiBreaker = new Opossum(
   breakerOptions,
 );
 
-// ==============================================================================
-// 3. LÓGICA DE NEGÓCIO DO JOB (PROCESSO DE ENRIQUECIMENTO)
-// ===
-
 async function processProductEnrichment(job: Job): Promise<void> {
   const { productId, sku } = job.data;
 
@@ -65,9 +61,7 @@ async function processProductEnrichment(job: Job): Promise<void> {
   const fakeStoreData = await externalApiBreaker.fire(fakeStoreId);
 
   const enrichedAttributes = {
-    external_title: fakeStoreData.title,
-    external_category: fakeStoreData.category,
-    external_base_price: fakeStoreData.price,
+    external_data: fakeStoreData,
     api_enrich_at: new Date().toISOString(),
   };
 
@@ -80,10 +74,6 @@ async function processProductEnrichment(job: Job): Promise<void> {
       status: "PROCESSED",
     });
 }
-
-// ==============================================================================
-// 4. INICIALIZAÇÃO DO WORKER & TRATAMENTO DE FALHAS (BullMQ)
-// ==============================================================================
 
 export const worker = new Worker(
   "product_queue",
