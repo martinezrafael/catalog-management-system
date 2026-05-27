@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -10,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface Product {
   id: string;
@@ -34,11 +36,13 @@ export function CatalogDashboard({ refreshTrigger }: CatalogDashboardProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
 
-  // Estados dos filtros conectados à API avançada do Back
   const [filterQ, setFilterQ] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterColor, setFilterColor] = useState("");
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -50,6 +54,9 @@ export function CatalogDashboard({ refreshTrigger }: CatalogDashboardProps) {
         params.append("category_id", filterCategory);
       if (filterColor) params.append("color", filterColor);
 
+      params.append("page", currentPage.toString());
+      params.append("limit", itemsPerPage.toString());
+
       const response = await fetch(
         `http://localhost:3333/api/v1/products?${params.toString()}`,
       );
@@ -60,6 +67,10 @@ export function CatalogDashboard({ refreshTrigger }: CatalogDashboardProps) {
     } catch (error) {
       console.error("Erro ao buscar produtos:", error);
     }
+  }, [filterQ, filterStatus, filterCategory, filterColor, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
   }, [filterQ, filterStatus, filterCategory, filterColor]);
 
   useEffect(() => {
@@ -97,7 +108,6 @@ export function CatalogDashboard({ refreshTrigger }: CatalogDashboardProps) {
 
   return (
     <div className="space-y-6">
-      {/* CARD DE FILTROS AVANÇADOS */}
       <Card className="p-4 shadow-sm border-slate-200 grid grid-cols-1 sm:grid-cols-4 gap-4 bg-white">
         <div className="space-y-1">
           <label className="text-[10px] font-bold text-slate-400 uppercase">
@@ -155,7 +165,6 @@ export function CatalogDashboard({ refreshTrigger }: CatalogDashboardProps) {
         </div>
       </Card>
 
-      {/* SHADCN TABLE DATA GRID */}
       <Card className="shadow-sm border-slate-200 overflow-hidden bg-white">
         <Table>
           <TableHeader className="bg-slate-50">
@@ -199,17 +208,20 @@ export function CatalogDashboard({ refreshTrigger }: CatalogDashboardProps) {
                       {prod.description || "Sem descrição"}
                     </div>
                   </TableCell>
+
                   <TableCell className="font-semibold text-slate-900">
                     {((prod.price_cents || 0) / 100).toLocaleString("pt-BR", {
                       style: "currency",
                       currency: "BRL",
                     })}
                   </TableCell>
+
                   <TableCell>
-                    <pre className="text-[10px] bg-slate-50 p-2 rounded-md border border-slate-100 max-w-[200px] overflow-x-auto font-mono text-slate-500">
+                    <pre className="text-[10px] bg-slate-50 p-2 rounded-md border border-slate-100 max-w-[200px] max-h-[120px] overflow-auto font-mono text-slate-500">
                       {JSON.stringify(prod.attributes, null, 2)}
                     </pre>
                   </TableCell>
+
                   <TableCell className="text-center">
                     <Badge
                       variant="outline"
@@ -233,6 +245,33 @@ export function CatalogDashboard({ refreshTrigger }: CatalogDashboardProps) {
             )}
           </TableBody>
         </Table>
+
+        <div className="flex items-center justify-between p-4 bg-slate-50 border-t border-slate-100 text-xs">
+          <div className="text-slate-500 font-medium">
+            Página Atual:{" "}
+            <span className="text-slate-900 font-bold">{currentPage}</span>
+          </div>
+          <div className="flex gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="h-8 px-2"
+            >
+              <ChevronLeft className="size-4 mr-0.5" /> Anterior
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((prev) => prev + 1)}
+              disabled={products.length < itemsPerPage}
+              className="h-8 px-2"
+            >
+              Próximo <ChevronRight className="size-4 ml-0.5" />
+            </Button>
+          </div>
+        </div>
       </Card>
     </div>
   );
