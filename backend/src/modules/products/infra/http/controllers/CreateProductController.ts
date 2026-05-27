@@ -11,24 +11,34 @@ export class CreateProductController {
       const [product] = await trx("products")
         .insert({
           name: productData.name,
-          description: productData.description,
+          description: productData.description || "",
           sku: productData.sku,
           price_cents: productData.price_cents,
-          attributes: JSON.stringify(productData.attributes),
+          attributes: JSON.stringify(productData.attributes || {}),
           status: "PROCESSING",
         })
         .returning("*");
 
-      await trx("product_categories").insert(
-        productData.category_ids.map((catId: number) => ({
-          product_id: product.id,
-          category_id: catId,
-        })),
+      if (productData.category_ids && productData.category_ids.length > 0) {
+        await trx("product_categories").insert(
+          productData.category_ids.map((catId: number) => ({
+            product_id: product.id,
+            category_id: catId,
+          })),
+        );
+      }
+
+      await productQueue.add(
+        "enrich_product",
+        { productId: product.id, sku: product.sku },
+        {
+          attempts: 3,
+          backoff: {
+            type: "exponential",
+            delay: 2000,
+          },
+        },
       );
-
-      const jobPayload = { productId: product.id, sku: product.sku };
-
-      await productQueue.add("enrich_product", jobPayload);
 
       return { id: product.id, status: product.status };
     });
