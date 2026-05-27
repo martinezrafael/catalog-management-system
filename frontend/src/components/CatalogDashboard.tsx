@@ -11,10 +11,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 
 interface Product {
-  id: string;
+  id: string | number;
   name: string;
   description: string;
   sku: string;
@@ -26,6 +26,13 @@ interface Product {
 interface Category {
   id: number;
   name: string;
+}
+
+interface PaginationMeta {
+  totalItems: number;
+  totalPages: number;
+  currentPage: number;
+  itemsPerPage: number;
 }
 
 interface CatalogDashboardProps {
@@ -42,6 +49,13 @@ export function CatalogDashboard({ refreshTrigger }: CatalogDashboardProps) {
   const [filterColor, setFilterColor] = useState("");
 
   const [currentPage, setCurrentPage] = useState(1);
+  const [meta, setMeta] = useState<PaginationMeta>({
+    totalItems: 0,
+    totalPages: 1,
+    currentPage: 1,
+    itemsPerPage: 5,
+  });
+
   const itemsPerPage = 5;
 
   const fetchProducts = useCallback(async () => {
@@ -63,11 +77,44 @@ export function CatalogDashboard({ refreshTrigger }: CatalogDashboardProps) {
       if (response.ok) {
         const result = await response.json();
         setProducts(result.data || []);
+        if (result.meta) setMeta(result.meta);
       }
     } catch (error) {
       console.error("Erro ao buscar produtos:", error);
     }
   }, [filterQ, filterStatus, filterCategory, filterColor, currentPage]);
+
+  // Handler de reprocessamento corrigido com tratamento visual de erro
+  const handleRetryProduct = async (productId: string | number) => {
+    try {
+      // Força a atualização visual imediata para PROCESSING na tela
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === productId ? { ...p, status: "PROCESSING" } : p,
+        ),
+      );
+
+      const response = await fetch(
+        `http://localhost:3333/api/v1/products/${productId}/retry`,
+        {
+          method: "POST",
+        },
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Erro retornado pelo servidor:", errorData);
+        // Desfaz o estado otimista caso o backend rejeite a reinjeção
+        fetchProducts();
+        alert(
+          `Falha no reprocessamento: ${errorData.error || "Erro desconhecido"}`,
+        );
+      }
+    } catch (error) {
+      console.error("Erro de rede ao tentar retry:", error);
+      fetchProducts();
+    }
+  };
 
   useEffect(() => {
     setCurrentPage(1);
@@ -75,17 +122,11 @@ export function CatalogDashboard({ refreshTrigger }: CatalogDashboardProps) {
 
   useEffect(() => {
     fetch("http://localhost:3333/api/v1/categories")
-      .then((res) => {
-        if (!res.ok) throw new Error("Erro ao buscar categorias");
-        return res.json();
-      })
-      .then((data) => {
-        const resolvedCategories = Array.isArray(data) ? data : data.data || [];
-        setCategories(resolvedCategories);
-      })
-      .catch((err) =>
-        console.error("Erro ao carregar categorias no filtro:", err),
-      );
+      .then((res) => (res.ok ? res.json() : { data: [] }))
+      .then((data) =>
+        setCategories(Array.isArray(data) ? data : data.data || []),
+      )
+      .catch((err) => console.error("Erro ao carregar categorias:", err));
   }, [refreshTrigger]);
 
   useEffect(() => {
@@ -94,10 +135,7 @@ export function CatalogDashboard({ refreshTrigger }: CatalogDashboardProps) {
     const hasPendingProducts = products.some(
       (prod) => prod.status === "PROCESSING",
     );
-
-    if (!hasPendingProducts) {
-      return;
-    }
+    if (!hasPendingProducts) return;
 
     const interval = setInterval(() => {
       fetchProducts();
@@ -108,6 +146,7 @@ export function CatalogDashboard({ refreshTrigger }: CatalogDashboardProps) {
 
   return (
     <div className="space-y-6">
+      {/* SEÇÃO DE FILTROS */}
       <Card className="p-4 shadow-sm border-slate-200 grid grid-cols-1 sm:grid-cols-4 gap-4 bg-white">
         <div className="space-y-1">
           <label className="text-[10px] font-bold text-slate-400 uppercase">
@@ -208,37 +247,46 @@ export function CatalogDashboard({ refreshTrigger }: CatalogDashboardProps) {
                       {prod.description || "Sem descrição"}
                     </div>
                   </TableCell>
-
                   <TableCell className="font-semibold text-slate-900">
                     {((prod.price_cents || 0) / 100).toLocaleString("pt-BR", {
                       style: "currency",
                       currency: "BRL",
                     })}
                   </TableCell>
-
                   <TableCell>
                     <pre className="text-[10px] bg-slate-50 p-2 rounded-md border border-slate-100 max-w-[200px] max-h-[120px] overflow-auto font-mono text-slate-500">
                       {JSON.stringify(prod.attributes, null, 2)}
                     </pre>
                   </TableCell>
-
                   <TableCell className="text-center">
-                    <Badge
-                      variant="outline"
-                      className={`font-bold uppercase tracking-wider text-[10px] px-2.5 py-0.5 shadow-sm ${
-                        prod.status === "PROCESSED"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    <div className="flex items-center justify-center gap-2">
+                      <Badge
+                        variant="outline"
+                        className={`font-bold uppercase tracking-wider text-[10px] px-2.5 py-0.5 shadow-sm ${
+                          prod.status === "PROCESSED"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : prod.status === "PROCESSING"
+                              ? "bg-amber-50 text-amber-700 border-amber-200 animate-pulse"
+                              : "bg-rose-50 text-rose-700 border-rose-200"
+                        }`}
+                      >
+                        {prod.status === "PROCESSED"
+                          ? "Processed"
                           : prod.status === "PROCESSING"
-                            ? "bg-amber-50 text-amber-700 border-amber-200 animate-pulse"
-                            : "bg-rose-50 text-rose-700 border-rose-200"
-                      }`}
-                    >
-                      {prod.status === "PROCESSED"
-                        ? "Processed"
-                        : prod.status === "PROCESSING"
-                          ? "Processing"
-                          : "Failed"}
-                    </Badge>
+                            ? "Processing"
+                            : "Failed"}
+                      </Badge>
+                      {prod.status === "FAILED" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRetryProduct(prod.id)}
+                          className="size-7 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-full border border-rose-100 shadow-sm transition-all"
+                        >
+                          <RotateCcw className="size-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -247,9 +295,24 @@ export function CatalogDashboard({ refreshTrigger }: CatalogDashboardProps) {
         </Table>
 
         <div className="flex items-center justify-between p-4 bg-slate-50 border-t border-slate-100 text-xs">
-          <div className="text-slate-500 font-medium">
-            Página Atual:{" "}
-            <span className="text-slate-900 font-bold">{currentPage}</span>
+          <div className="text-slate-500 font-medium flex items-center gap-4">
+            <div>
+              Página:{" "}
+              <span className="text-slate-900 font-bold">
+                {meta.currentPage}
+              </span>{" "}
+              de{" "}
+              <span className="text-slate-900 font-bold">
+                {meta.totalPages}
+              </span>
+            </div>
+            <div className="w-px h-3 bg-slate-200" />
+            <div>
+              Total de Itens:{" "}
+              <span className="text-slate-900 font-bold">
+                {meta.totalItems}
+              </span>
+            </div>
           </div>
           <div className="flex gap-1.5">
             <Button
@@ -265,7 +328,7 @@ export function CatalogDashboard({ refreshTrigger }: CatalogDashboardProps) {
               variant="outline"
               size="sm"
               onClick={() => setCurrentPage((prev) => prev + 1)}
-              disabled={products.length < itemsPerPage}
+              disabled={currentPage >= meta.totalPages}
               className="h-8 px-2"
             >
               Próximo <ChevronRight className="size-4 ml-0.5" />

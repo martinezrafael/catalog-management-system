@@ -17,11 +17,11 @@ const AdvancedSearchSchema = z.object({
   size: z.string().optional(),
 
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(20),
+  limit: z.coerce.number().int().positive().max(100).default(5),
 });
 
 export class SearchProductController {
-  async index(req: Request, res: Response): Promise<Response> {
+  async handle(req: Request, res: Response): Promise<Response> {
     if (req.query["category_id"] === "all") {
       delete req.query["category_id"];
     }
@@ -29,48 +29,71 @@ export class SearchProductController {
     const parsedQuery = AdvancedSearchSchema.parse(req.query);
     const offset = (parsedQuery.page - 1) * parsedQuery.limit;
 
-    const query = db("products").distinct("products.*");
+    const dataQuery = db("products").distinct("products.*");
+    const countQuery = db("products")
+      .count<{ count: string | number }>("products.id as count")
+      .first();
 
-    if (parsedQuery.category_id) {
-      query
-        .join(
-          "product_categories",
-          "products.id",
-          "product_categories.product_id",
-        )
-        .where("product_categories.category_id", parsedQuery.category_id);
-    }
+    const applyFilters = (queryBuilder: Knex.QueryBuilder) => {
+      if (parsedQuery.category_id) {
+        queryBuilder
+          .join(
+            "product_categories",
+            "products.id",
+            "product_categories.product_id",
+          )
+          .where("product_categories.category_id", parsedQuery.category_id);
+      }
 
-    if (parsedQuery.q) {
-      query.where((builder: Knex.QueryBuilder) =>
-        builder
-          .whereILike("products.name", `%${parsedQuery.q}%`)
-          .orWhereILike("products.description", `%${parsedQuery.q}%`),
-      );
-    }
+      if (parsedQuery.q) {
+        queryBuilder.where(
+          (builder: Knex.QueryBuilder) =>
+            builder
+              .whereILike("products.name", `%${parsedQuery.q}%`)
+              .orWhereILike("products.description", `%${parsedQuery.q}%`)
+              .orWhereILike("products.sku", `%${parsedQuery.q}%`), // Adicionado busca por SKU por performance
+        );
+      }
 
-    if (parsedQuery.status) {
-      query.where("products.status", parsedQuery.status);
-    }
+      if (parsedQuery.status) {
+        queryBuilder.where("products.status", parsedQuery.status);
+      }
 
-    if (parsedQuery.color) {
-      query.whereRaw("products.attributes->>'color' = ?", [parsedQuery.color]);
-    }
+      if (parsedQuery.color) {
+        queryBuilder.whereRaw("products.attributes->>'color' ILIKE ?", [
+          `%${parsedQuery.color}%`,
+        ]);
+      }
 
-    if (parsedQuery.size) {
-      query.whereRaw("products.attributes->>'size' = ?", [parsedQuery.size]);
-    }
+      if (parsedQuery.size) {
+        queryBuilder.whereRaw("products.attributes->>'size' = ?", [
+          parsedQuery.size,
+        ]);
+      }
+    };
 
-    const data = await query
-      .limit(parsedQuery.limit)
-      .offset(offset)
-      .orderBy("products.created_at", "desc");
+    applyFilters(dataQuery);
+    applyFilters(countQuery as unknown as Knex.QueryBuilder);
+
+    const [products, totalCountResult] = await Promise.all([
+      dataQuery
+        .limit(parsedQuery.limit)
+        .offset(offset)
+        .orderBy("products.created_at", "desc"),
+      countQuery,
+    ]);
+
+    const totalItems = Number(totalCountResult?.count || 0);
+    const totalPages = Math.ceil(totalItems / parsedQuery.limit);
 
     return res.status(200).json({
-      page: parsedQuery.page,
-      limit: parsedQuery.limit,
-      count: data.length,
-      data,
+      data: products,
+      meta: {
+        totalItems,
+        totalPages,
+        currentPage: parsedQuery.page,
+        itemsPerPage: parsedQuery.limit,
+      },
     });
   }
 }
