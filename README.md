@@ -1,152 +1,207 @@
-# Sistema de Gerenciamento de Catálogo de Produtos
+# 📦 Sistema de Gerenciamento de Catálogo de Produtos
 
-Este repositório contém uma arquitetura distribuída e assíncrona voltada para o processamento de catálogos de produtos com alta vazão e tolerância a falhas. O ecossistema dissocia o recebimento de requisições HTTP da execução de tarefas pesadas de rede (enriquecimento de dados) utilizando mensageria baseada em filas controladas.
+[![Backend CI](https://github.com/martinezrafael/catalog-management-system/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/martinezrafael/catalog-management-system/actions/workflows/backend-ci.yml)
+[![Frontend CI](https://github.com/martinezrafael/catalog-management-system/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/martinezrafael/catalog-management-system/actions/workflows/frontend-ci.yml)
+
+Uma solução full-stack corporativa de alta vazão projetada sob uma **Arquitetura Orientada a Eventos (EDA)**. O principal pilar do sistema é o desacoplamento completo entre a ingestão síncrona de requisições HTTP e o ciclo pesado de processamento em segundo plano (I/O de rede e enriquecimento de dados através de APIs terceiras).
 
 ---
 
-## 1. Gestão e Configuração de Ambientes (.env)
+## 🏗️ 1. Visão Geral da Arquitetura
 
-O sistema adota uma estratégia de segregação de configurações baseada no padrão de doze fatores (12-Factor App). A aplicação é totalmente controlada por três escopos de arquivos de ambiente distintos:
-
-- **`.env.example` (Gabarito Estrutural):** Arquivo público monitorado pelo Git que serve de modelo para a inicialização do projeto. Ele lista todas as chaves obrigatórias exigidas pela validação de esquema do Zod, sem expor credenciais reais ou senhas de produção.
-- **`.env.test` (Isolamento de Testes):** Arquivo público com as configurações estritas e conexões exclusivas voltadas para a suíte de testes de integração e concorrência. Ele garante que a execução do Jest opere em bancos de dados e caches efêmeros, impedindo que as limpezas de tabelas feitas pelos testes apaguem os dados gerados no seu ambiente de desenvolvimento.
-- **`.env` (Execução Runtime Local):** Arquivo privado e ignorado pelo Git (`.gitignore`) que deve ser criado manualmente na raiz do projeto antes da inicialização. Ele define as credenciais locais que serão injetadas diretamente nos contêineres do Docker Compose.
-
-### Passo 1: Criação do arquivo `.env` local
-
-Para rodar os contêineres localmente, crie o arquivo **`.env`** na raiz do repositório utilizando o conteúdo abaixo como definição padrão para o funcionamento do ambiente:
-
-```env
-# ==============================================================================
-# CONFIGURAÇÕES DA INFRAESTRUTURA (Lidas diretamente pelo docker-compose.yml)
-# ==============================================================================
-POSTGRES_USER=admin
-POSTGRES_PASSWORD=secretpassword
-POSTGRES_DB=catalog_management
-
-REDIS_PASSWORD=redissecuredpassword
-
-# ==============================================================================
-# CONFIGURAÇÕES DO BACKEND (Injetadas nos containers da API e do Worker)
-# ==============================================================================
-NODE_ENV=production
-PORT=3333
-
-DATABASE_URL=postgres://admin:secretpassword@postgres:5432/catalog_management
-REDIS_URL=redis://redis:6379
-FAKE_STORE_API_URL=https://fakestoreapi.com
-
-# URL do frontend permitida pelo CORS do Backend
-# Desenvolvimento Local (docker-compose.yml): http://localhost:3000
-# Produção Local (docker-compose.prod.yml): http://localhost
-FRONTEND_URL=http://localhost
-
-# ==============================================================================
-# CONFIGURAÇÕES DO FRONTEND
-# ==============================================================================
-VITE_API_URL=http://localhost:3333
+O ecossistema é composto por cinco camadas totalmente conteinerizadas e orquestradas em rede isolada:
 
 ```
 
-### Passo 2: Inicialização da Aplicação (Modo Desenvolvimento)
+┌─────────────────┐             ┌─────────────────┐             ┌─────────────────┐
+│                 │  HTTP POST  │   Backend API   │  Persistência │                 │
+│  Frontend SPA   ├────────────►│  (Porta 3333)   ├──────────────►│   PostgreSQL    │
+│   (React 19)    │             │ (Node.js/Exp 5) │     ACID      │   (Status:      │
+│                 │             └────────┬────────┘               │  PROCESSING)    │
+└─────────────────┘                      │                        └─────────────────┘
+│ Enfileirar
+▼ Job
+┌─────────────────┐
+│  Fila BullMQ    │
+│  (Over Redis)   │
+└────────┬────────┘
+│
+│ Consome
+▼ Task
+┌─────────────────┐             ┌─────────────────┐
+│  Background     │  Enriquecer │ Fake Store API  │
+│     Worker      ├────────────►│   (API Rest     │
+│ (Update status) │             │    Externa)     │
+└─────────────────┘             └─────────────────┘
 
-Se desejar executar a aplicação com sincronização de volumes locais e recarregamento automático (hot-reloading), execute na raiz do repositório:
+```
+
+### Componentes Principais & Tecnologias
+
+- **Frontend SPA:** Desenvolvido em **React 19**, **Vite**, **Tailwind CSS** e **Shadcn/UI**. Utiliza _Short Polling_ condicional e reativo para atualizar o grid de produtos sem sobrecarregar a infraestrutura.
+- **API Gateway/Backend:** Construído em **Node.js (Express v5)** com **TypeScript** estrito. Gerencia validação de contratos em tempo de execução via **Zod**, regras de idempotência e escrita relacional transacional.
+- **Background Worker:** Instância isolada do Node.js dedicada exclusivamente a consumir as tarefas gerenciadas pelo **BullMQ (Redis)**. Possui mecanismos acoplados de estabilidade (_Circuit Breaker_ via **Opossum** e políticas de _backoff_ exponencial).
+
+---
+
+## 🚀 2. Guia de Execução Local (Ponta a Ponta)
+
+Siga os passos abaixo para clonar, configurar e rodar o projeto do absoluto zero em sua máquina.
+
+### Pré-requisitos
+
+- **Docker** instalado (versão 20.10+)
+- **Docker Compose** (v2.0+)
+- **Git**
+
+### Passo 0: Clonar o Repositório
+
+Abra o seu terminal e execute os comandos abaixo para baixar o projeto e acessar a pasta raiz:
+
+```bash
+# Clonar o repositório
+git clone [https://github.com/martinezrafael/catalog-management-system.git](https://github.com/martinezrafael/catalog-management-system.git)
+
+# Acessar a pasta raiz do projeto
+cd catalog-management-system
+
+```
+
+### Passo 1: Configuração Ambiental (`.env`)
+
+O projeto utiliza um arquivo centralizador de variáveis de ambiente localizado na raiz. Fornecemos um arquivo de exemplo pré-configurado. Basta duplicá-lo:
+
+```bash
+cp .env.example .env
+
+```
+
+### Passo 2: Inicialização em Modo Desenvolvimento
+
+Para erguer a malha de serviços com espelhamento de volumes locais e _Hot-Reload_ (qualquer alteração no código será refletida instantaneamente nos containers):
 
 ```bash
 docker compose down -v && docker compose up --build
 
 ```
 
-_Portas de acesso:_ Frontend em `http://localhost:3000` | API Rest em `http://localhost:3333`.
+Após a conclusão do build, as interfaces estarão disponíveis em:
 
-### Passo 3: Inicialização Otimizada (Modo Produção / AWS Ready)
+- **Frontend (SPA):** `http://localhost:3000`
+- **API Backend:** `http://localhost:3333/api/v1`
 
-Para rodar a aplicação simulando o comportamento de nuvem (TypeScript compilado para JavaScript puro dentro da pasta `dist`, dependências de desenvolvimento omitidas e frontend servido de forma estática via Nginx na porta 80), utilize:
+### Passo 3: Inicialização em Modo Produção (AWS Ready)
+
+Para simular um ambiente produtivo otimizado (onde o código TypeScript é compilado nativamente para Javascript dentro de `/dist`, dependências de desenvolvimento são omitidas e o Front-end é servido de forma ultra-rápida via **Nginx** na porta padrão HTTP 80):
 
 ```bash
-docker compose down -v && docker compose -f docker-compose.prod.yml up --build
+docker compose -f docker-compose.prod.yml down -v
+docker compose -f docker-compose.prod.yml up --build
 
 ```
 
-_Portas de acesso:_ Frontend em `http://localhost` | API Rest em `http://localhost:3333`.
-
-### Passo 4: Execução da Suíte de Testes Automatizados
-
-O comando de testes ignora o arquivo `.env` e carrega exclusivamente o arquivo `.env.test` para preservar as bases. Para rodar a cobertura:
-
-1. Navegue até a pasta do backend: `cd backend`
-2. Execute o script: `npm run test`
+- **Frontend (Nginx Multi-stage):** `http://localhost`
+- **API Backend:** `http://localhost:3333/api/v1`
 
 ---
 
-## 2. Perguntas de Raciocínio Técnico
+## 🧪 3. Suíte de Testes Automatizados
 
-### Integração Resiliente
+Desenvolvemos uma estratégia rigorosa de testes de integração ponta a ponta focados em comportamentos críticos de concorrência e resiliência usando **Jest**.
 
-**Pergunta:** Como você desenharia uma integração com uma API externa que possui limites de requisição (rate limiting) e instabilidade ocasional para garantir que seu sistema continue funcional?
+### Executando os Testes
 
-**Resposta:** Eu desenharia essa integração separando o sistema principal da API externa através de uma fila de mensagens e um padrão de mensageria assíncrona. Em vez de fazer requisições síncronas, o sistema publica os dados na fila, liberando a aplicação para continuar rodando. Para o rate limiting, os workers consomem essa fila em um ritmo controlado (usando o algoritmo Token Bucket, por exemplo), monitorando os cabeçalhos HTTP de limite da API para desacelerar quando necessário. Para a instabilidade, implementaria um Circuit Breaker para cortar as chamadas se os erros persistirem, evitando travar o sistema. As falhas pontuais seriam tratadas com Retry com Exponential Backoff e Jitter (tentativas espaçadas). Como plano de contingência (fallback), o sistema serviria dados armazenados em cache ou processaria a tarefa em background, garantindo resiliência total.
+Para rodar os testes localmente usando uma base efêmera isolada (`.env.test`):
 
-### Refinamento de Requisito
+```bash
+cd backend
+npm install
+npm run test
 
-**Pergunta:** Ao receber uma demanda vaga da área de negócio, quais etapas você segue para transformá-la em uma especificação técnica pronta para desenvolvimento?
+```
 
-**Resposta:** Para transformar uma demanda vaga em uma especificação técnica pronta, eu sigo um processo de refinamento focado em extrair o valor real do negócio e blindar o escopo. Primeiro, faço uma reunião focado no alinhamento com a área de negócio para entender a dor que querem resolver (o "porquê") e o resultado esperado, traduzindo a ideia para o formato de User Stories (Quem, O quê e Para quê). Em seguida, defino claramente o escopo estipulando os Critérios de Aceite (o que a funcionalidade deve fazer) e, o mais importante, o que está fora do escopo para evitar o aumento do projeto no meio do caminho. Depois, passo para a análise técnica: mapeio os impactos na arquitetura atual, desenho as mudanças no banco de dados e modulo as novas APIs ou contratos de integração. Por fim, divido essa especificação em tarefas menores, claras e pontuadas (tasks), adicionando cenários de testes e diagramas de fluxo se necessário. A entrega é um documento pronto onde o desenvolvedor sabe exatamente o que codificar e como testar, sem margem para suposições.
+### Escopo de Cobertura Crítica
 
-### Idempotência
-
-**Pergunta:** Em uma API de pagamentos ou pedidos, como você evita que o processamento seja duplicado em caso de retentativas do cliente?
-
-**Resposta:** Para evitar o processamento duplicado, eu implementaria uma estratégia baseada em Chave de Idempotência. O cliente gera um identificador único (como um UUID) para a transação e o envia no cabeçalho da requisição. Ao receber o pedido, o sistema verifica em um cache rápido (como o Redis) se essa chave já existe; se não existir, ela é gravada temporariamente com o status "em processamento" para travar novas tentativas simultâneas. O pagamento é então processado no banco de dados e o resultado final é salvo no Redis atrelado àquela chave. Se o cliente perder a conexão e retransmitir a mesma requisição com a mesma chave, o sistema intercepta a chamada, busca o resultado já gravado no cache e o devolve imediatamente, garantindo que o dinheiro ou o pedido nunca sejam cobrados duas vezes.
-
-### Síncrono vs. Assíncrono
-
-**Pergunta:** Quais critérios definem se um fluxo deve ser resolvido imediatamente na requisição HTTP ou processado em segundo plano (fila)?
-
-**Resposta:** Os critérios principais para definir entre síncrono e assíncrono são o tempo de execução, a dependência do usuário e a resiliência do sistema. Um fluxo deve ser síncrono (resolvido na hora) quando o cliente precisa da resposta imediata para continuar sua ação, o processo é leve e leva milissegundos, como em uma validação de login, busca de endereço por CEP ou checagem de saldo. Já o processamento deve ser assíncrono (via fila) quando a tarefa demora mais de um ou dois segundos e não impede a navegação imediata do usuário. Exemplos claros disso são a geração de relatórios pesados, envio de e-mails em lote, processamento de imagens e integrações com APIs externas instáveis. Ao jogar essas tarefas demoradas ou imprevisíveis para o segundo plano, liberamos a requisição HTTP rapidamente, o que evita o travamento dos servidores e melhora drasticamente a experiência do usuário.
-
-### Segurança
-
-**Pergunta:** Quais controles mínimos de segurança você aplica em uma API exposta publicamente?
-
-**Resposta:** Para proteger uma API exposta publicamente, eu aplico controles mínimos focados em autenticação, integridade e proteção de recursos. Primeiro, exijo criptografia em trânsito usando TLS/HTTPS e implemento autenticação robusta via OAuth2 ou JWT, garantindo que apenas usuários validados acessem os recursos. Para mitigar ataques de negação de serviço (DoS) e abusos automatizados, configuro Rate Limiting direto no API Gateway. Toda informação recebida passa por uma validação rigorosa de payload para impedir ataques de injeção (como SQL Injection). Por fim, aplico o princípio do menor privilégio através de Controle de Acesso Baseado em Funções (RBAC), escondo detalhes da infraestrutura tratando mensagens de erro genéricas e mantém auditoria e logs estruturados para monitorar comportamentos suspeitos em tempo real.
-
-### Qualidade e Entrega
-
-**Pergunta:** Como você decide o que é essencial para uma primeira versão (MVP) e o que deve ser tratado como débito técnico ou melhoria futura?
-
-**Resposta:** Para definir o escopo de um MVP, eu aplico o critério do valor mínimo para o negócio e para o usuário: se a funcionalidade for removida e o produto perder o seu propósito principal ou deixar de resolver a dor central do cliente, ela é essencial. Todo o restante, como automações complexas, otimizações extremas de performance e recursos secundários, é jogado para o backlog de melhorias. O que vira débito técnico consciente são as escolhas de arquitetura feitas para acelerar a entrega, como usar uma infraestrutura mais simples e monolítica ou implementar um processo manual nos bastidores (o famoso "fazer fumaça") para validar a demanda antes de construir um sistema automatizado robusto. O limite dessa linha é a segurança e a integridade dos dados, que nunca devem ser negligenciadas; se o atalho colocar em risco as informações do cliente ou inviabilizar a evolução futura do código, ele deixa de ser débito técnico aceitável e se torna um erro de engenharia.
-
-### Governança e IA
-
-**Pergunta:** Como utilizar IA para acelerar o desenvolvimento sem comprometer a segurança dos dados e a qualidade do código a longo prazo?
-
-**Resposta:** Para acelerar o desenvolvimento com IA de forma segura, a estratégia é tratar o assistente como um copiloto técnico, nunca como o tomador de decisão. Em relação à segurança dos dados, o controle mínimo é a governança de privacidade: deve-se proibir o uso de chaves de API, senhas ou dados reais de clientes nos prompts, utilizando apenas ferramentas corporativas com contratos que garantam que o código gerado não será usado para treinar modelos públicos. Para a qualidade a longo prazo, o segredo é a revisão rigorosa: o código gerado pela IA deve passar obrigatoriamente por testes automatizados e code review humano. A IA é excelente para criar códigos de infraestrutura, testes unitários e algoritmos isolados, mas falha no contexto da arquitetura global e regras de negócio complexas. Ao documentar as decisões e proibir o "copiar e colar" cego, evitamos o endividamento técnico estrutural e mantemos o sistema sustentável.
+1. **`idempotency.spec.ts`:** Dispara requisições paralelas idênticas em frações de milissegundos para garantir que a trava no Redis bloqueie transações duplicadas de forma atômica.
+2. **`rate-limit.spec.ts`:** Valida se o limitador de vazão acoplado no BullMQ retém de forma segura surtos de requests acima de 10 execuções por segundo.
+3. **`worker.spec.ts`:** Utiliza a biblioteca `nock` para injetar instabilidades simuladas (HTTP 503) na API externa, validando o isolamento do Worker e o comportamento correto do circuito.
 
 ---
 
-## 3. Decisões Técnicas e Trade-offs Realizados
+## 🛠️ 4. Decisões Técnicas & Mecanismos Sênior
 
-- **Desacoplamento de Contexto (API vs. Worker):** O núcleo do sistema é cindido em duas instâncias de execução isoladas. No momento de ingestão do produto, a API executa validações rápidas de contrato, persiste o registro básico com o status temporário `PROCESSING` e responde imediatamente com `HTTP 202 Accepted`. O processamento pesado de rede fica delegado ao worker em segundo plano utilizando o ecossistema BullMQ/Redis. O trade-off envolve a necessidade de pooling na interface visual, mas blinda a API contra exaustão de conexões HTTP.
-- **Transações Relacionais ACID na Ingestão:** Toda a lógica de inserção inicial do produto e vinculação com suas categorias associadas está centralizada sob o escopo de uma transação transacional gerenciada pelo Knex (`db.transaction`). Caso ocorra qualquer instabilidade de barramento ou erro na inserção relacional múltipla, o PostgreSQL executa o _rollback_ imediato, impedindo produtos com dados incompletos ou órfãos na base.
-- **Armazenamento Híbrido Relacional + NoSQL (JSONB):** A modelagem adota tabelas e chaves estrangeiras rígidas para elementos estruturais estáveis (vínculo de categorias). Propriedades flexíveis, metadados dinâmicos e payloads resultantes do enriquecimento externo são alocados em campos binários NoSQL (`JSONB`) na tabela de produtos. O trade-off elimina a complexidade estrutural de modelagens EAV (_Entity-Attribute-Value_) e evita migrações custosas a cada nova propriedade adicionada.
-- **Mutações JSONB Atômicas em Query Única:** Para anular brechas de condições de corrida (_Race Conditions_) entre ações concomitantes do usuário via `PATCH` e a finalização assíncrona do Worker, o controlador executa atualizações atômicas diretamente na query SQL usando o operador nativo de concatenação e fusão do Postgres (`attributes || ?::jsonb`). Isso dispensa um `SELECT` prévio e assegura consistência em nível de engine.
-- **Short Polling Frontend Otimizado:** O frontend atualiza as informações consultando o servidor a cada 3 segundos. Contudo, o ciclo do temporizador é condicional e reativo: ele analisa o estado atual da tela usando `.some()` e aloca o loop apenas enquanto houver registros no status provisório `PROCESSING`. Quando os produtos chegam ao estado final, o loop é interrompido automaticamente, poupando requisições na API.
+### Camada de Idempotência Robusta
+
+Para evitar processamento duplicado em cenários de instabilidade na rede do cliente, foi implementado um middleware Express conectado ao Redis.
+
+- O cliente envia um UUID exclusivo sob o cabeçalho `Idempotency-Key`.
+- A aplicação executa o comando atômico `SET NX` com TTL de 5 minutos.
+- Requisições concorrentes idênticas que entram em paralelo recebem um `HTTP 409 Conflict`, enquanto requisições idênticas sequenciais recebem o resultado armazenado em cache.
+
+### Padrão Circuit Breaker (Opossum)
+
+O Worker de segundo plano comunica-se com a `FakeStoreAPI` (simulando um parceiro externo instável). Para blindar nossa infraestrutura contra desperdício de conexões e falhas em cascata:
+
+- Configuramos um teto de timeout de 3 segundos por chamada.
+- Caso o índice de falhas da API parceira ultrapasse 50% em uma janela amostral, o circuito **abre** por 10 segundos, rejeitando chamadas locais imediatamente sem onerar a rede.
+- A fila possui política de **5 tentativas com Backoff Exponencial** iniciando em 2 segundos.
+
+### Prevenção de Race Conditions no DB
+
+Como o usuário pode alterar dados do produto via requisições HTTP normais (`PATCH`) simultaneamente ao período em que o Worker está processando o enriquecimento, eliminamos o risco de condições de corrida banindo o fluxo tradicional de `SELECT -> UPDATE` em memória. O Worker realiza **fusões atômicas nativas** no PostgreSQL manipulando a coluna `JSONB` via SQL direto (`attributes || ?::jsonb`), garantindo a consistência.
 
 ---
 
-## 4. Plano de Evolução Arquitetural (Cenário de 1 Milhão de Acessos)
+## 🧠 5. Raciocínio Técnico (Perguntas Abertas do Desafio)
 
-Caso o ecossistema mude para um cenário corporativo de altíssima escala, as seguintes atualizações seriam priorizadas:
+#### 1. Integração Resiliente
 
-1. **Substituição de Polling por Server-Sent Events (SSE):** Manter loops HTTP contra a API para milhões de usuários geraria overhead desnecessário nos servidores. Adotaríamos conexões persistentes via streams unidirecionais de **SSE**. A API passaria a empurrar as notificações reativas de atualização aos navegadores em tempo real, disparadas por canais de Pub/Sub do Redis assim que o Worker concluísse a tarefa.
-2. **Arquitetura de CQRS com Elasticsearch/Meilisearch:** Desvincular as pesquisas textuais, filtros de categorias e buscas avançadas do banco de dados relacional. Os dados de produtos estáveis seriam espelhados de forma automática em um motor de busca distribuído focado em leitura rápida (**Elasticsearch**), mantendo o PostgreSQL otimizado puramente para transações de escritas e mutações.
-3. **Topologia de Banco com Réplicas de Leitura:** O banco de dados relacional seria configurado com um nó principal isolado para escritas (_Primary Instance_) e um cluster de múltiplas réplicas assíncronas assinaladas exclusivamente para a leitura de catálogos (_Read Replicas_), distribuindo o tráfego de busca de forma balanceada.
-4. **Observabilidade e Telemetria Estruturada:** Substituição de logs textuais de console pelo uso de um formatador estruturado em formato JSON (como o **Pino.js**). Isso permitiria canalizar e centralizar os rastreios do Circuit Breaker, logs de erro e taxas de vazão diretamente para coletores de métricas APM (como Datadog ou stack Prometheus/Grafana).
+Desenharia a integração utilizando uma arquitetura orientada a eventos (_Event-Driven_) com mensageria (BullMQ/Redis ou RabbitMQ). As chamadas seriam envelopadas por um componente de _Circuit Breaker_ (como o Opossum) para interromper requisições em caso de quedas persistentes do parceiro. Para respeitar os limites de _Rate Limiting_, configuraria um controle de concorrência direto nos consumidores da fila (_worker throttling_), limitando a vazão máxima de jobs por segundo e aplicando políticas de _Exponential Backoff_ com variação aleatória (_jitter_) para gerenciar as retentativas em caso de erro HTTP 429.
+
+#### 2. Refinamento de Requisito
+
+O processo seria dividido em quatro etapas estruturadas:
+
+1. **Descoberta (Discovery):** Reunião com os stakeholders para entender a dor de negócio e o valor esperado (foco no impacto, não na solução técnica).
+2. **Mapeamento de Restrições:** Definição de critérios de aceitação e regras de contorno (ex: volumetria esperada, criticidade, SLA).
+3. **Modelagem e Contratos:** Desenho do fluxo de dados, diagramas de sequência e escrita dos contratos de API (Swagger/OpenAPI).
+4. **Homologação:** Revisão técnica com o time para quebrar a demanda em tarefas técnicas granulares, prontas para o desenvolvimento (Definition of Ready).
+
+#### 3. Idempotência
+
+A estratégia ideal consiste em exigir uma chave de idempotência exclusiva (`Idempotency-Key` gerada como UUID pelo cliente) no cabeçalho das requisições de mutação. No backend, uma trava distribuída atômica (como o comando `SET key value NX PX` do Redis) é criada assim que a requisição é aceita. Se uma segunda chamada com a mesma chave entrar enquanto a primeira está processando, ela é rejeitada (ex: HTTP 409 ou aguarda). Se a primeira já tiver terminado, o resultado histórico salvo no cache é retornado imediatamente, bloqueando efeitos colaterais duplicados no banco de dados.
+
+#### 4. Síncrono vs. Assíncrono
+
+- **Critérios para Síncrono:** Operações que exigem resposta imediata para a tomada de decisão do usuário, possuem baixo tempo de execução física (I/O desprezível) e forte acoplamento de ciclo de vida (ex: autenticação de login, consulta de saldo em tempo real, validação cadastral simples).
+- **Critérios para Assíncrono:** Operações pesadas que envolvem processamento intensivo de CPU ou I/O de rede lento (integração com APIs terceiras), tarefas volumosas em lote (batch), ou fluxos cujo resultado final não impede o usuário de continuar navegando (ex: geração de relatórios complexos, envio de e-mails, processamento de vídeos e ingestão/enriquecimento de catálogos).
+
+#### 5. Monitoramento e Observabilidade
+
+Para uma aplicação em produção sob alta concorrência, implementaria os três pilares da observabilidade de forma centralizada:
+
+1. **Métricas:** Prometheus capturando telemetria de infraestrutura (CPU, Memória, IOPS) e métricas de aplicação (taxa de erro HTTP, latência p95/p99 e tamanho das filas do BullMQ), com dashboards no Grafana.
+2. **Logs Estruturados:** Winston/Pino gerando logs em formato JSON, consolidados em uma pilha OpenSearch/ELK ou Grafana Loki para auditoria e rastreabilidade.
+3. **Rastreamento Distribuído (Tracing):** OpenTelemetry integrado ao APM (Datadog ou Jaeger) para injetar IDs de correlação (`trace_id`) que acompanham a jornada de uma requisição desde o clique no Frontend, passando pela API, persistência, publicação em fila, até a execução final pelo Worker.
+
+#### 6. Banco de Dados Relacional vs. Não-Relacional (NoSQL)
+
+- **Vantagens do Relacional (PostgreSQL):** Garantia estrita de integridade referencial e transações ACID complexas, ideal para dados financeiros ou estruturados com forte relacionamento (como vínculos entre produtos e categorias), além de suporte maduro a queries analíticas e índices flexíveis.
+- **Vantagens do NoSQL (MongoDB/Redis):** Escalabilidade horizontal simplificada (sharding), alta performance para operações simples de leitura/escrita de chave-valor e flexibilidade de esquema (schema-less), ideal para catálogos dinâmicos onde os produtos possuem atributos completamente heterogêneos.
+
+#### 7. CI/CD (Integração e Entrega Contínuas)
+
+O pipeline automatizado seria construído em ferramentas como GitHub Actions de forma modularizada:
+
+1. **Etapa de CI (Garantia de Qualidade):** Disparado a cada _Pull Request_ para as ramificações principais. Executa linters (`ESLint`), checagem de tipos TypeScript (`tsc`), testes unitários e testes de integração end-to-end com bancos em containers docker efêmeros. O código só é elegível para merge se todas as verificações passarem.
+2. **Etapa de CD (Entrega Segura):** Disparado após o merge na branch `main`. Realiza o build das imagens Docker otimizadas (multi-stage), publica as imagens em um registro privado (AWS ECR) e atualiza a infraestrutura de destino usando estratégias seguras de implantação como **Green-Blue Deployment** ou **Canary Releases** no Kubernetes (EKS), garantindo zero tempo de inatividade (_Zero Downtime_) e rollback automatizado em caso de anomalia nas métricas de saúde da aplicação.
 
 ---
 
-## 5. Cobertura de Testes e Qualidade de Software
+## 📈 6. Visão de Escala (Cenário: 1 Milhão de Acessos)
 
-- **Garantia de Fluxos Críticos:** A suíte contém testes integrados cobrindo concorrência simultânea para chaves de Idempotência, validações de isolamento de contratos DTO via Zod, comportamento sob falhas de serviços externos via mocks do `nock` e barramento preventivo de vazão por Rate Limiting.
-- **Garantia de Pipeline Verde (CI/CD):** Integração contínua configurada via **GitHub Actions**. O fluxo baixa o repositório, instala dependências, valida a tipagem estrita do TypeScript (`tsc --noEmit`) e levanta contêineres efêmeros e isolados de PostgreSQL e Redis no runner para rodar todos os testes automatizados a cada push ou pull request aberto nas branches principais.
+Caso o sistema precise evoluir do patamar de MVP para suportar milhões de acessos concorrentes, as seguintes alterações seriam priorizadas:
+
+1. **Server-Sent Events (SSE) ou WebSockets:** O mecanismo de _Short Polling_ atual (tabela batendo na API a cada 3 segundos) seria substituído por conexões unidirecionais persistentes (SSE). O Worker publicaria a conclusão do enriquecimento em canais Pub/Sub do Redis, notificando o navegador do usuário em tempo real e zerando o overhead de requests repetitivos de listagem.
+2. **Segregação de Leitura e Escrita (CQRS):** Separaríamos completamente o fluxo de gravação do fluxo de consulta. As listagens e buscas avançadas seriam alimentadas por um motor NoSQL especializado em buscas textuais indexadas, como o **Elasticsearch** ou **OpenSearch**, desonerando o PostgreSQL de queries pesadas de filtragem.
+3. **Réplicas de Leitura no DB:** Configuração de um cluster PostgreSQL contendo uma instância _Primary_ (exclusiva para escrita de transações ACID e manipulação do Worker) e múltiplas instâncias _Read Replicas_ distribuídas geograficamente atrás de um balanceador de carga para atender às consultas do catálogo.
