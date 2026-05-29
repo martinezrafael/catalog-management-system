@@ -22,12 +22,11 @@ export function CategoryForm({ onCategoryCreated }: CategoryFormProps) {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Estado padronizado para erros: Record<nome_do_campo, mensagem_de_erro>
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrors({}); // Limpa erros de tentativas anteriores
+    setErrors({});
     setLoading(true);
 
     try {
@@ -36,7 +35,6 @@ export function CategoryForm({ onCategoryCreated }: CategoryFormProps) {
         headers: {
           "Content-Type": "application/json",
         },
-        // Envia undefined se estiver vazio para acionar o erro de obrigatoriedade no backend
         body: JSON.stringify({ name: name || undefined }),
       });
 
@@ -72,7 +70,6 @@ export function CategoryForm({ onCategoryCreated }: CategoryFormProps) {
     }
   };
 
-  // Função auxiliar para renderizar mensagens de erro sem poluir o JSX
   const renderError = (fieldKey: string) => {
     if (!errors[fieldKey]) return null;
     return (
@@ -82,7 +79,6 @@ export function CategoryForm({ onCategoryCreated }: CategoryFormProps) {
     );
   };
 
-  // Função auxiliar para injetar classes CSS de erro condicionalmente
   const inputClass = (fieldKey: string) => {
     return errors[fieldKey]
       ? "border-red-500 focus-visible:ring-red-500/50"
@@ -99,7 +95,6 @@ export function CategoryForm({ onCategoryCreated }: CategoryFormProps) {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Campo: Nome da Categoria */}
           <div className="space-y-1">
             <label className="text-xs font-bold text-slate-500 uppercase">
               Nome da Categoria *

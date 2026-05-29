@@ -31,7 +31,6 @@ const envSchema = z.object({
 
 const parseResult = envSchema.safeParse(process.env);
 
-// 4. Tratamento Isolado e Amigável de Erros Críticos
 if (!parseResult.success) {
   console.error("Environment variables validation error.");
 

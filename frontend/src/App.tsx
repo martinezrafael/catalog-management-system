@@ -6,14 +6,12 @@ import { CategoryForm } from "./components/CategoryForm";
 export default function App() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  // Disparador unificado para revalidar todos os dados e selects reativos da SPA
   const handleRefresh = () => {
     setRefreshTrigger((prev) => prev + 1);
   };
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 md:p-12 max-w-7xl mx-auto space-y-8">
-      {/* CABEÇALHO DO DASHBOARD */}
       <header className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-slate-200 pb-5">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">
@@ -29,11 +27,9 @@ export default function App() {
         </div>
       </header>
 
-      {/* GRID PRINCIPAL DO ECOSSISTEMA */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* COLUNA ESQUERDA: FORMULÁRIOS DE ENTRADA */}
         <div className="lg:col-span-1 space-y-6">
-          {/* 🟢 CORRIGIDO: Agora o ProductForm recebe o gatilho para escutar a criação de novas categorias */}
           <ProductForm
             onProductCreated={handleRefresh}
             refreshTrigger={refreshTrigger}
@@ -41,7 +37,6 @@ export default function App() {
           <CategoryForm onCategoryCreated={handleRefresh} />
         </div>
 
-        {/* COLUNA DIREITA: FILTROS AVANÇADOS E FILA DE PRODUTOS */}
         <div className="lg:col-span-2">
           <CatalogDashboard refreshTrigger={refreshTrigger} />
         </div>

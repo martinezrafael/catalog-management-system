@@ -4,8 +4,13 @@ import cors from "cors";
 import { z } from "zod";
 import { env } from "../../../config/env.js";
 import { routes } from "./routes.js";
+import { errorMap } from "./validationErrors.js";
 
 const app = express();
+
+z.config({
+  customError: errorMap as z.ZodErrorMap,
+});
 
 app.use(
   cors({
@@ -25,9 +30,9 @@ app.use(
       return res.status(400).json({
         status: "validation_error",
         message: "Invalid request payload attributes.",
-        errors: err.issues.map((issue: z.ZodIssue) => ({
+        errors: err.issues.map((issue: z.core.$ZodIssue) => ({
           field: issue.path.join("."),
-          message: issue.message,
+          message: issue.message, // Aqui será injetada a string traduzida em português
         })),
       });
     }
