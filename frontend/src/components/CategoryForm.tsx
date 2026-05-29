@@ -13,13 +13,21 @@ interface CategoryFormProps {
   onCategoryCreated: () => void;
 }
 
+interface ValidationError {
+  field: string;
+  message: string;
+}
+
 export function CategoryForm({ onCategoryCreated }: CategoryFormProps) {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Estado para capturar erros específicos do Zod para categorias
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return alert("O nome da categoria é obrigatório.");
+    setErrors({});
 
     setLoading(true);
 
@@ -32,17 +40,31 @@ export function CategoryForm({ onCategoryCreated }: CategoryFormProps) {
         body: JSON.stringify({ name }),
       });
 
-      console.log(response);
-
-      if (response.ok) {
+      if (response.status === 201) {
         setName("");
         onCategoryCreated();
+      } else if (response.status === 400) {
+        const errorData = await response.json();
+
+        if (
+          errorData.status === "validation_error" &&
+          Array.isArray(errorData.errors)
+        ) {
+          const fieldErrors: Record<string, string> = {};
+          errorData.errors.forEach((err: ValidationError) => {
+            fieldErrors[err.field] = err.message;
+          });
+          setErrors(fieldErrors);
+        } else {
+          alert(errorData.message || "Erro ao validar categoria.");
+        }
       } else {
-        alert("Erro ao cadastrar categoria.");
+        const errJson = await response.json().catch(() => ({}));
+        alert(errJson.message || "Erro ao criar categoria.");
       }
     } catch (error) {
       console.error(error);
-      alert("Erro de conexão ao salvar categoria.");
+      alert("Erro de conexão com o servidor.");
     } finally {
       setLoading(false);
     }
@@ -50,28 +72,39 @@ export function CategoryForm({ onCategoryCreated }: CategoryFormProps) {
 
   return (
     <Card className="shadow-sm border-slate-200">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-md font-bold">Nova Categoria</CardTitle>
+      <CardHeader>
+        <CardTitle className="text-lg font-bold">Nova Categoria</CardTitle>
         <CardDescription>
-          Crie partições relacionais para o catálogo.
+          Criação síncrona diretamente no banco de dados.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <div className="flex-1">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-500 uppercase">
+              Nome da Categoria
+            </label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Ex: Eletrônicos, Roupas"
-              className="h-9"
+              placeholder="Ex: Eletrônicos, Vestuário"
+              className={
+                errors.name
+                  ? "border-red-500 focus-visible:ring-red-500/50"
+                  : ""
+              }
             />
+            {errors.name && (
+              <p className="text-xs text-red-500 font-medium">{errors.name}</p>
+            )}
           </div>
+
           <Button
             type="submit"
             disabled={loading}
-            className="bg-slate-900 hover:bg-slate-800 text-white h-9 text-xs px-4"
+            className="w-full bg-slate-900 hover:bg-slate-800 text-white"
           >
-            {loading ? "Salvando..." : "Criar"}
+            {loading ? "Criando..." : "Criar Categoria"}
           </Button>
         </form>
       </CardContent>

@@ -19,6 +19,11 @@ interface ProductFormProps {
   refreshTrigger?: number;
 }
 
+interface ValidationError {
+  field: string;
+  message: string;
+}
+
 export function ProductForm({
   onProductCreated,
   refreshTrigger,
@@ -33,7 +38,9 @@ export function ProductForm({
   const [size, setSize] = useState("Medium");
   const [loading, setLoading] = useState(false);
 
-  // Carrega e atualiza as categorias para o select relacional
+  // Estado para armazenar erros mapeados por campo
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
   useEffect(() => {
     fetch("http://localhost:3333/api/v1/categories")
       .then((res) => {
@@ -49,10 +56,7 @@ export function ProductForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !sku || !selectedCategory || !priceCents) {
-      alert("Por favor, preencha todos os campos obrigatórios.");
-      return;
-    }
+    setErrors({}); // Limpa erros anteriores
 
     setLoading(true);
 
@@ -60,8 +64,8 @@ export function ProductForm({
       name,
       description,
       sku,
-      price_cents: Number(priceCents),
-      category_ids: [Number(selectedCategory)],
+      price_cents: priceCents ? Number(priceCents) : undefined, // Deixa o backend/Zod validar se for vazio
+      category_ids: selectedCategory ? [Number(selectedCategory)] : [],
       attributes: { color, size },
     };
 
@@ -81,9 +85,26 @@ export function ProductForm({
         setSku("");
         setPriceCents("");
         setColor("");
+        setSelectedCategory("");
         onProductCreated();
+      } else if (response.status === 400) {
+        const errorData = await response.json();
+
+        if (
+          errorData.status === "validation_error" &&
+          Array.isArray(errorData.errors)
+        ) {
+          const fieldErrors: Record<string, string> = {};
+          errorData.errors.forEach((err: ValidationError) => {
+            fieldErrors[err.field] = err.message;
+          });
+          setErrors(fieldErrors);
+        } else {
+          alert(errorData.message || "Erro de validação nos dados.");
+        }
       } else {
-        alert("Erro ao enviar o produto para a fila.");
+        const errJson = await response.json().catch(() => ({}));
+        alert(errJson.message || "Erro ao enviar o produto.");
       }
     } catch (error) {
       console.error(error);
@@ -103,26 +124,45 @@ export function ProductForm({
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Nome */}
           <div className="space-y-1">
             <label className="text-xs font-bold text-slate-500 uppercase">
-              Nome *
+              Nome
             </label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ex: Mouse Gamer Pro"
+              className={
+                errors.name
+                  ? "border-red-500 focus-visible:ring-red-500/50"
+                  : ""
+              }
             />
+            {errors.name && (
+              <p className="text-xs text-red-500 font-medium">{errors.name}</p>
+            )}
           </div>
+
+          {/* SKU */}
           <div className="space-y-1">
             <label className="text-xs font-bold text-slate-500 uppercase">
-              SKU Único *
+              SKU Único
             </label>
             <Input
               value={sku}
               onChange={(e) => setSku(e.target.value)}
-              placeholder="Ex: MSE-GPRO-01"
+              placeholder="Ex: ABC-1234-AB"
+              className={
+                errors.sku ? "border-red-500 focus-visible:ring-red-500/50" : ""
+              }
             />
+            {errors.sku && (
+              <p className="text-xs text-red-500 font-medium">{errors.sku}</p>
+            )}
           </div>
+
+          {/* Descrição */}
           <div className="space-y-1">
             <label className="text-xs font-bold text-slate-500 uppercase">
               Descrição
@@ -131,28 +171,56 @@ export function ProductForm({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Resumo do produto..."
+              className={
+                errors.description
+                  ? "border-red-500 focus-visible:ring-red-500/50"
+                  : ""
+              }
             />
+            {errors.description && (
+              <p className="text-xs text-red-500 font-medium">
+                {errors.description}
+              </p>
+            )}
           </div>
+
           <div className="grid grid-cols-2 gap-3">
+            {/* Preço */}
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-500 uppercase">
-                Preço (Centavos) *
+                Preço (Centavos)
               </label>
               <Input
                 type="number"
                 value={priceCents}
                 onChange={(e) => setPriceCents(e.target.value)}
                 placeholder="59900"
+                className={
+                  errors.price_cents
+                    ? "border-red-500 focus-visible:ring-red-500/50"
+                    : ""
+                }
               />
+              {errors.price_cents && (
+                <p className="text-xs text-red-500 font-medium">
+                  {errors.price_cents}
+                </p>
+              )}
             </div>
+
+            {/* Categoria */}
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-500 uppercase">
-                Categoria *
+                Categoria
               </label>
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full h-10 rounded-md border border-slate-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className={`w-full h-10 rounded-md border px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 ${
+                  errors.category_ids
+                    ? "border-red-500 focus:ring-red-500/50"
+                    : "border-slate-200 focus:ring-slate-900"
+                }`}
               >
                 <option value="">Selecione...</option>
                 {categories.map((cat) => (
@@ -161,34 +229,61 @@ export function ProductForm({
                   </option>
                 ))}
               </select>
+              {errors.category_ids && (
+                <p className="text-xs text-red-500 font-medium">
+                  {errors.category_ids}
+                </p>
+              )}
             </div>
           </div>
+
+          {/* Atributos */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-500 uppercase">
-                Cor (JSON)
+                Cor
               </label>
               <Input
                 value={color}
                 onChange={(e) => setColor(e.target.value)}
                 placeholder="Ex: Preto"
+                className={
+                  errors["attributes.color"]
+                    ? "border-red-500 focus-visible:ring-red-500/50"
+                    : ""
+                }
               />
+              {errors["attributes.color"] && (
+                <p className="text-xs text-red-500 font-medium">
+                  {errors["attributes.color"]}
+                </p>
+              )}
             </div>
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-500 uppercase">
-                Tamanho (JSON)
+                Tamanho
               </label>
               <select
                 value={size}
                 onChange={(e) => setSize(e.target.value)}
-                className="w-full h-10 rounded-md border border-slate-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className={`w-full h-10 rounded-md border px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 ${
+                  errors["attributes.size"]
+                    ? "border-red-500 focus:ring-red-500/50"
+                    : "border-slate-200 focus:ring-slate-900"
+                }`}
               >
                 <option value="Small">Small</option>
                 <option value="Medium">Medium</option>
                 <option value="Large">Large</option>
               </select>
+              {errors["attributes.size"] && (
+                <p className="text-xs text-red-500 font-medium">
+                  {errors["attributes.size"]}
+                </p>
+              )}
             </div>
           </div>
+
           <Button
             type="submit"
             disabled={loading}
