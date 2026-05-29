@@ -46,12 +46,11 @@ export class SearchProductController {
       }
 
       if (parsedQuery.q) {
-        queryBuilder.where(
-          (builder: Knex.QueryBuilder) =>
-            builder
-              .whereILike("products.name", `%${parsedQuery.q}%`)
-              .orWhereILike("products.description", `%${parsedQuery.q}%`)
-              .orWhereILike("products.sku", `%${parsedQuery.q}%`), // Adicionado busca por SKU por performance
+        queryBuilder.where((builder: Knex.QueryBuilder) =>
+          builder
+            .whereILike("products.name", `%${parsedQuery.q}%`)
+            .orWhereILike("products.description", `%${parsedQuery.q}%`)
+            .orWhereILike("products.sku", `%${parsedQuery.q}%`),
         );
       }
 

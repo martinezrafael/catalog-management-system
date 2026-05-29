@@ -87,7 +87,6 @@ export function CatalogDashboard({ refreshTrigger }: CatalogDashboardProps) {
   // Handler de reprocessamento corrigido com tratamento visual de erro
   const handleRetryProduct = async (productId: string | number) => {
     try {
-      // Força a atualização visual imediata para PROCESSING na tela
       setProducts((prev) =>
         prev.map((p) =>
           p.id === productId ? { ...p, status: "PROCESSING" } : p,
@@ -104,7 +103,6 @@ export function CatalogDashboard({ refreshTrigger }: CatalogDashboardProps) {
       if (!response.ok) {
         const errorData = await response.json();
         console.error("Erro retornado pelo servidor:", errorData);
-        // Desfaz o estado otimista caso o backend rejeite a reinjeção
         fetchProducts();
         alert(
           `Falha no reprocessamento: ${errorData.error || "Erro desconhecido"}`,
