@@ -2,10 +2,11 @@ import type { Request, Response } from "express";
 import { db } from "../../../../../shared/infra/database/postgres.js";
 import { productQueue } from "../../../../../shared/infra/queues/bullmq.js";
 import { redisClient } from "../../../../../shared/infra/cache/redis.js";
+import { CreateProductSchema } from "../../../dtos/CreateProductDTO.js";
 
 export class CreateProductController {
   async handle(req: Request, res: Response): Promise<Response> {
-    const productData = req.body;
+    const productData = CreateProductSchema.parse(req.body);
 
     const httpResponse = await db.transaction(async (trx) => {
       const [product] = await trx("products")
