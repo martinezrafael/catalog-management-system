@@ -38,35 +38,35 @@ export function ProductForm({
   const [size, setSize] = useState("Medium");
   const [loading, setLoading] = useState(false);
 
-  // Estado para armazenar erros mapeados por campo
+  // Estado estruturado de erros: Record<nome_do_campo, mensagem_de_erro>
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Busca as categorias ao montar o componente
   useEffect(() => {
     fetch("http://localhost:3333/api/v1/categories")
-      .then((res) => {
-        if (!res.ok) throw new Error("Erro ao buscar categorias");
-        return res.json();
-      })
-      .then((data) => {
-        const resolvedCategories = Array.isArray(data) ? data : data.data || [];
-        setCategories(resolvedCategories);
-      })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) =>
+        setCategories(Array.isArray(data) ? data : data.data || []),
+      )
       .catch((err) => console.error("Erro ao buscar categorias:", err));
   }, [refreshTrigger]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrors({}); // Limpa erros anteriores
-
+    setErrors({}); // Limpa os erros de cliques anteriores
     setLoading(true);
 
+    // Monta o payload exatamente como o CreateProductSchema espera no backend
     const payload = {
-      name,
-      description,
-      sku,
-      price_cents: priceCents ? Number(priceCents) : undefined, // Deixa o backend/Zod validar se for vazio
-      category_ids: selectedCategory ? [Number(selectedCategory)] : [],
-      attributes: { color, size },
+      name: name || undefined, // Envia undefined se estiver vazio para disparar o "Este campo é obrigatório"
+      description: description || undefined,
+      sku: sku || undefined,
+      price_cents: priceCents ? Number(priceCents) : undefined,
+      category_ids: selectedCategory ? [Number(selectedCategory)] : undefined,
+      attributes: {
+        color: color || undefined,
+        size: size || undefined,
+      },
     };
 
     try {
@@ -80,31 +80,33 @@ export function ProductForm({
       });
 
       if (response.status === 202) {
+        // Sucesso: Limpa os inputs
         setName("");
         setDescription("");
         setSku("");
         setPriceCents("");
         setColor("");
+        setSize("Medium");
         setSelectedCategory("");
         onProductCreated();
       } else if (response.status === 400) {
+        // Captura os erros de validação processados pelo middleware + zodErrorMap do backend
         const errorData = await response.json();
 
         if (
           errorData.status === "validation_error" &&
           Array.isArray(errorData.errors)
         ) {
-          const fieldErrors: Record<string, string> = {};
+          const mappedErrors: Record<string, string> = {};
+
           errorData.errors.forEach((err: ValidationError) => {
-            fieldErrors[err.field] = err.message;
+            mappedErrors[err.field] = err.message;
           });
-          setErrors(fieldErrors);
-        } else {
-          alert(errorData.message || "Erro de validação nos dados.");
+
+          setErrors(mappedErrors);
         }
       } else {
-        const errJson = await response.json().catch(() => ({}));
-        alert(errJson.message || "Erro ao enviar o produto.");
+        alert("Erro ao enviar o produto para a fila.");
       }
     } catch (error) {
       console.error(error);
@@ -112,6 +114,23 @@ export function ProductForm({
     } finally {
       setLoading(false);
     }
+  };
+
+  // Função auxiliar para renderizar mensagens de erro de forma limpa e sem duplicar código
+  const renderError = (fieldKey: string) => {
+    if (!errors[fieldKey]) return null;
+    return (
+      <p className="text-xs text-red-500 font-medium mt-1">
+        {errors[fieldKey]}
+      </p>
+    );
+  };
+
+  // Função auxiliar para aplicar a borda vermelha condicional nos inputs inválidos
+  const inputClass = (fieldKey: string) => {
+    return errors[fieldKey]
+      ? "border-red-500 focus-visible:ring-red-500/50"
+      : "border-slate-200";
   };
 
   return (
@@ -124,100 +143,60 @@ export function ProductForm({
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Nome */}
+          {/* Campo: Nome */}
           <div className="space-y-1">
             <label className="text-xs font-bold text-slate-500 uppercase">
-              Nome
+              Nome *
             </label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ex: Mouse Gamer Pro"
-              className={
-                errors.name
-                  ? "border-red-500 focus-visible:ring-red-500/50"
-                  : ""
-              }
+              className={inputClass("name")}
             />
-            {errors.name && (
-              <p className="text-xs text-red-500 font-medium">{errors.name}</p>
-            )}
+            {renderError("name")}
           </div>
 
-          {/* SKU */}
+          {/* Campo: SKU */}
           <div className="space-y-1">
             <label className="text-xs font-bold text-slate-500 uppercase">
-              SKU Único
+              SKU Único *
             </label>
             <Input
               value={sku}
               onChange={(e) => setSku(e.target.value)}
-              placeholder="Ex: ABC-1234-AB"
-              className={
-                errors.sku ? "border-red-500 focus-visible:ring-red-500/50" : ""
-              }
+              placeholder="Ex: AAA-1111-AA"
+              className={inputClass("sku")}
             />
-            {errors.sku && (
-              <p className="text-xs text-red-500 font-medium">{errors.sku}</p>
-            )}
-          </div>
-
-          {/* Descrição */}
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-500 uppercase">
-              Descrição
-            </label>
-            <Input
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Resumo do produto..."
-              className={
-                errors.description
-                  ? "border-red-500 focus-visible:ring-red-500/50"
-                  : ""
-              }
-            />
-            {errors.description && (
-              <p className="text-xs text-red-500 font-medium">
-                {errors.description}
-              </p>
-            )}
+            {renderError("sku")}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            {/* Preço */}
+            {/* Campo: Preço */}
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-500 uppercase">
-                Preço (Centavos)
+                Preço (Centavos) *
               </label>
               <Input
                 type="number"
                 value={priceCents}
                 onChange={(e) => setPriceCents(e.target.value)}
                 placeholder="59900"
-                className={
-                  errors.price_cents
-                    ? "border-red-500 focus-visible:ring-red-500/50"
-                    : ""
-                }
+                className={inputClass("price_cents")}
               />
-              {errors.price_cents && (
-                <p className="text-xs text-red-500 font-medium">
-                  {errors.price_cents}
-                </p>
-              )}
+              {renderError("price_cents")}
             </div>
 
-            {/* Categoria */}
+            {/* Campo: Categoria */}
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-500 uppercase">
-                Categoria
+                Categoria *
               </label>
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
                 className={`w-full h-10 rounded-md border px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 ${
-                  errors.category_ids
+                  errors["category_ids"]
                     ? "border-red-500 focus:ring-red-500/50"
                     : "border-slate-200 focus:ring-slate-900"
                 }`}
@@ -229,16 +208,13 @@ export function ProductForm({
                   </option>
                 ))}
               </select>
-              {errors.category_ids && (
-                <p className="text-xs text-red-500 font-medium">
-                  {errors.category_ids}
-                </p>
-              )}
+              {renderError("category_ids")}
             </div>
           </div>
 
-          {/* Atributos */}
+          {/* Seção de Atributos do Produto */}
           <div className="grid grid-cols-2 gap-3">
+            {/* Sub-objeto Opcional: Atributos (Cor) */}
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-500 uppercase">
                 Cor
@@ -246,19 +222,13 @@ export function ProductForm({
               <Input
                 value={color}
                 onChange={(e) => setColor(e.target.value)}
-                placeholder="Ex: Preto"
-                className={
-                  errors["attributes.color"]
-                    ? "border-red-500 focus-visible:ring-red-500/50"
-                    : ""
-                }
+                placeholder="Ex: Preto Cósmico"
+                className={inputClass("attributes.color")}
               />
-              {errors["attributes.color"] && (
-                <p className="text-xs text-red-500 font-medium">
-                  {errors["attributes.color"]}
-                </p>
-              )}
+              {renderError("attributes.color")}
             </div>
+
+            {/* Sub-objeto Opcional: Atributos (Tamanho) */}
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-500 uppercase">
                 Tamanho
@@ -266,7 +236,7 @@ export function ProductForm({
               <select
                 value={size}
                 onChange={(e) => setSize(e.target.value)}
-                className={`w-full h-10 rounded-md border px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 ${
+                className={`w-full h-10 rounded-md border border-slate-200 px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 ${
                   errors["attributes.size"]
                     ? "border-red-500 focus:ring-red-500/50"
                     : "border-slate-200 focus:ring-slate-900"
@@ -275,19 +245,16 @@ export function ProductForm({
                 <option value="Small">Small</option>
                 <option value="Medium">Medium</option>
                 <option value="Large">Large</option>
+                <option value="X-Large">X-Large</option>
               </select>
-              {errors["attributes.size"] && (
-                <p className="text-xs text-red-500 font-medium">
-                  {errors["attributes.size"]}
-                </p>
-              )}
+              {renderError("attributes.size")}
             </div>
           </div>
 
           <Button
             type="submit"
             disabled={loading}
-            className="w-full bg-slate-900 hover:bg-slate-800 text-white mt-2"
+            className="w-full bg-slate-900 text-white mt-2"
           >
             {loading ? "Enviando..." : "Postar Produto na Fila"}
           </Button>

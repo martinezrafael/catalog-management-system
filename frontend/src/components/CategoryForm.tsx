@@ -22,13 +22,12 @@ export function CategoryForm({ onCategoryCreated }: CategoryFormProps) {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Estado para capturar erros específicos do Zod para categorias
+  // Estado padronizado para erros: Record<nome_do_campo, mensagem_de_erro>
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrors({});
-
+    setErrors({}); // Limpa erros de tentativas anteriores
     setLoading(true);
 
     try {
@@ -37,7 +36,8 @@ export function CategoryForm({ onCategoryCreated }: CategoryFormProps) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ name }),
+        // Envia undefined se estiver vazio para acionar o erro de obrigatoriedade no backend
+        body: JSON.stringify({ name: name || undefined }),
       });
 
       if (response.status === 201) {
@@ -50,11 +50,13 @@ export function CategoryForm({ onCategoryCreated }: CategoryFormProps) {
           errorData.status === "validation_error" &&
           Array.isArray(errorData.errors)
         ) {
-          const fieldErrors: Record<string, string> = {};
+          const mappedErrors: Record<string, string> = {};
+
           errorData.errors.forEach((err: ValidationError) => {
-            fieldErrors[err.field] = err.message;
+            mappedErrors[err.field] = err.message;
           });
-          setErrors(fieldErrors);
+
+          setErrors(mappedErrors);
         } else {
           alert(errorData.message || "Erro ao validar categoria.");
         }
@@ -70,6 +72,23 @@ export function CategoryForm({ onCategoryCreated }: CategoryFormProps) {
     }
   };
 
+  // Função auxiliar para renderizar mensagens de erro sem poluir o JSX
+  const renderError = (fieldKey: string) => {
+    if (!errors[fieldKey]) return null;
+    return (
+      <p className="text-xs text-red-500 font-medium mt-1">
+        {errors[fieldKey]}
+      </p>
+    );
+  };
+
+  // Função auxiliar para injetar classes CSS de erro condicionalmente
+  const inputClass = (fieldKey: string) => {
+    return errors[fieldKey]
+      ? "border-red-500 focus-visible:ring-red-500/50"
+      : "border-slate-200";
+  };
+
   return (
     <Card className="shadow-sm border-slate-200">
       <CardHeader>
@@ -80,29 +99,24 @@ export function CategoryForm({ onCategoryCreated }: CategoryFormProps) {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Campo: Nome da Categoria */}
           <div className="space-y-1">
             <label className="text-xs font-bold text-slate-500 uppercase">
-              Nome da Categoria
+              Nome da Categoria *
             </label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ex: Eletrônicos, Vestuário"
-              className={
-                errors.name
-                  ? "border-red-500 focus-visible:ring-red-500/50"
-                  : ""
-              }
+              className={inputClass("name")}
             />
-            {errors.name && (
-              <p className="text-xs text-red-500 font-medium">{errors.name}</p>
-            )}
+            {renderError("name")}
           </div>
 
           <Button
             type="submit"
             disabled={loading}
-            className="w-full bg-slate-900 hover:bg-slate-800 text-white"
+            className="w-full bg-slate-900 hover:bg-slate-800 text-white mt-2"
           >
             {loading ? "Criando..." : "Criar Categoria"}
           </Button>
